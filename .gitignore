@@ -1,0 +1,7 @@
+*.flv
+*.spec
+/__pycache__/
+/build/
+/browser/
+/bin/
+/my_fav/
