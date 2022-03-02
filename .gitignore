@@ -1,5 +1,6 @@
 *.flv
 *.spec
+*.ipynb
 /__pycache__/
 /build/
 /browser/

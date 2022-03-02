@@ -2,11 +2,10 @@ import requests
 import os
 import sys
 import time
-# ml1532880516
 
-user_agent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36'
 headers = {
-    'user-Agent': user_agent
+    'referer': 'https://www.bilibili.com',
+    'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36'
 }
 
 quality_dict = {
@@ -30,27 +29,60 @@ quality_dict = {
 TIME = 5
 
 
+class Color:
+    BLACK = '\033[30m'  # (文字)黒
+    RED = '\033[31m'  # (文字)赤
+    GREEN = '\033[32m'  # (文字)緑
+    YELLOW = '\033[33m'  # (文字)黄
+    BLUE = '\033[34m'  # (文字)青
+    MAGENTA = '\033[35m'  # (文字)マゼンタ
+    CYAN = '\033[36m'  # (文字)シアン
+    WHITE = '\033[37m'  # (文字)白
+    COLOR_DEFAULT = '\033[39m'  # 文字色をデフォルトに戻す
+    BOLD = '\033[1m'  # 太字
+    UNDERLINE = '\033[4m'  # 下線
+    INVISIBLE = '\033[08m'  # 不可視
+    REVERCE = '\033[07m'  # 文字色と背景色を反転
+    BG_BLACK = '\033[40m'  # (背景)黒
+    BG_RED = '\033[41m'  # (背景)赤
+    BG_GREEN = '\033[42m'  # (背景)緑
+    BG_YELLOW = '\033[43m'  # (背景)黄
+    BG_BLUE = '\033[44m'  # (背景)青
+    BG_MAGENTA = '\033[45m'  # (背景)マゼンタ
+    BG_CYAN = '\033[46m'  # (背景)シアン
+    BG_WHITE = '\033[47m'  # (背景)白
+    BG_DEFAULT = '\033[49m'  # 背景色をデフォルトに戻す
+    RESET = '\033[0m'  # 全てリセット
+
+
 # --------------------------------------------------
-# 絶対パスを相対パスに (pyinstallerとjupyter notebook対応)
+# メイン関数
 # --------------------------------------------------
 def main():
-    print('###### マイリストのidを入力 ######')
-    ml_title, bvids = get_bvid()
-    print('マイリストのタイトル:', ml_title)
-    print('ダウンロードする動画数:', len(bvids))
+    print(Color.BLACK + Color.BG_WHITE + '###############################')
+    print('   ビリビリ動画ダウンローダ')
+    print('###############################\n' + Color.RESET)
+    print('M: マイリスid(ml[数字])または動画id(BV[文字列])を入力\n>> ', end='')
+    ml_title, bvids = get_bvid(input())
+    print('M: マイリストのタイトル:', ml_title)
+    print('M: ダウンロードする動画数:', len(bvids))
+    print('M: ダウンロードする画質:', list(quality_dict)[0:8], '\n >> ', end='')
+    ql = input()
+    print()
     cookies = get_cookie()
     print('###############################')
     for bvid in bvids:
-        print('待機中...')
-        time.sleep(TIME)
+        print()
         print('###--------------------------------------###')
-        video_prop, dl_info = get_durl(bvid, cookies)
+        video_prop, dl_info = get_durl(bvid, quality_dict[ql], cookies)
         download(ml_title, video_prop, dl_info)
+        print(f'M: {TIME}秒待機中...')
+        time.sleep(TIME)
         print('###--------------------------------------###')
 
 
 # --------------------------------------------------
-# 絶対パスを相対パスに (pyinstallerとjupyter notebook対応)
+# 絶対パスを相対パスに [入:相対パス, 出:絶対パス]
 # --------------------------------------------------
 def rel2abs_path(filename):
     if getattr(sys, 'frozen', False):
@@ -63,7 +95,20 @@ def rel2abs_path(filename):
 
 
 # --------------------------------------------------
-# PC上に存在するcookieを探索
+# API鯖のstatusを確認 [入:マイリスのid 出:マイリス名、ビデオid]
+# --------------------------------------------------
+def check_stat(response):
+    try:
+        if response['code'] == 0:
+            return
+        raise Exception(
+            f'{Color.YELLOW}W: API server returns | Error: {response["code"]}{Color.RESET}')
+    except Exception as e:
+        print(e)
+
+
+# --------------------------------------------------
+# PC上に存在するcookieを探索 [入:None 出:cookieのパス]
 # --------------------------------------------------
 def find_local_cookie():
     fp = os.path.join(os.getenv('APPDATA'), 'Mozilla', 'Firefox', 'Profiles')
@@ -75,12 +120,16 @@ def find_local_cookie():
         else:
             continue
         break
-    print('用いたcookieデータの場所:', fp)
+    if 'cookies.sqlite' not in fp:
+        print(Color.YELLOW + 'W: cookieを取得できませんでした' + Color.RESET)
+        fp = None
+    else:
+        print('M: cookieを取得しました')
     return fp
 
 
 # --------------------------------------------------
-# cookieを取得する
+# cookieを取得する [入:None 出:ビリビリ用のcookie]
 # --------------------------------------------------
 def get_cookie():
     import sqlite3
@@ -89,13 +138,15 @@ def get_cookie():
     import http.cookiejar
 
     cookiefile = find_local_cookie()
+    if cookiefile is None:
+        return ''
     temp_dir = tempfile.gettempdir()
     temp_cookiefile = os.path.join(temp_dir, 'temp_cookiefile.sqlite')
     shutil.copy2(cookiefile, temp_cookiefile)
     cookies = http.cookiejar.MozillaCookieJar()
     con = sqlite3.connect(temp_cookiefile)
     cur = con.cursor()
-    cur.execute("""SELECT host, name, value FROM moz_cookies""")
+    cur.execute('''SELECT host, name, value FROM moz_cookies''')
     cookies = cur.fetchall()
     cur.close
     con.close
@@ -113,15 +164,21 @@ def get_cookie():
 
 
 # --------------------------------------------------
-# マイリストからダウンロードする動画のリストを取得
+# マイリスから動画のリストを取得 [入:マイリスのid 出:マイリス名、ビデオid]
 # --------------------------------------------------
-def get_bvid():
-    mylist_id = input()  # ダウンロードするビデオのid
+def get_bvid(mylist_id):
+    if 'BV' in mylist_id:  # 動画idの場合は個別ダウンロード
+        return 'Individual', [mylist_id]
+    elif 'ml' not in mylist_id:  # 例外処理
+        print(Color.RED + '\nE: リストのidが無効です' + Color.RESET + '\n>> ', end='')
+        return get_bvid(input())
     url = f'http://api.bilibili.com/x/v3/fav/resource/list?media_id={mylist_id[2:]}&ps=1'
     res = requests.get(url).json()
+    check_stat(res)
     ml_title = res['data']['info']['title']  # マイリストの名前
     url = f'http://api.bilibili.com/x/v3/fav/resource/ids?media_id={mylist_id[2:]}'
     res = requests.get(url).json()
+    check_stat(res)
     data = res['data']
     bvids = []  # マイリスト内の動画id群
     for row in data:
@@ -130,47 +187,52 @@ def get_bvid():
 
 
 # --------------------------------------------------
-# ダウンロードURLの取得 [入:ビデオid 出:ビデオのメタデータ、DLするURL]
+# ダウンロードURLの取得 [入:ビデオid、画質、cookie 出:ビデオのメタデータ、DLするURL]
 # --------------------------------------------------
-def get_durl(bvid, cookies):
+def get_durl(bvid, qn, cookies):
     url = f'https://api.bilibili.com/x/web-interface/view?bvid={bvid}'
     res = requests.get(url).json()
+    check_stat(res)
     video_prop = res['data']
     cid = res['data']['cid']  # ダウンロードするビデオの固有id
-    qn = quality_dict.get('360p')
     url = f'http://api.bilibili.com/x/player/playurl?bvid={bvid}&cid={cid}&qn={qn}'
     res = requests.get(url, cookies=cookies, headers=headers).json()
+    check_stat(res)
     data = res.get('data')  # 動画のメタデータ
     if int(data['quality']) < qn:
-        print('注意:指定された画質よりも低い画質がDLされます')
+        print(Color.YELLOW + 'W: 指定された画質よりも低い画質がDLされます' + Color.RESET)
     dl_info = data['durl'][0]  # ダウンロードするファイル情報
-
-    print('利用可能:', data['accept_description'])
-    print('ダウンロード:', quality_dict.get(data['quality']))
-    print('利用可能:', dl_info['url'])
+    print('M: ダウンロード画質:', quality_dict.get(data['quality']))
     return video_prop, dl_info
 
 
 # --------------------------------------------------
-# 動画のダウンロード
+# 動画のダウンロード [入:マイリス名、ビデオのメタデータ、ダウンロード用メタデータ 出:None]
 # --------------------------------------------------
 def download(ml_title, video_prop, dl_info):
     from tqdm import tqdm
     title = f'{video_prop["owner"]["name"]} - {video_prop["title"]}'
-    print('ダウンロード開始:', title)
-    type = 'flv'
+    print('M: ダウンロード開始:', title)
     os.makedirs(rel2abs_path(ml_title), exist_ok=True)
-    fp = rel2abs_path(os.path.join(ml_title, f'{title}.{type}'))
+    fp = rel2abs_path(os.path.join(ml_title, f'{title}.mp4'))
+    if os.path.isfile(fp):
+        print(Color.YELLOW + 'W: すでにファイルが存在しています' + Color.RESET)
     with open(fp, 'wb+') as file:
         pbar = tqdm(total=int(dl_info['size']), unit='B', unit_scale=True)
         for chunk in requests.get(
                 dl_info['url'],
+                headers=headers,
                 stream=True).iter_content(
                 chunk_size=1024):
-            ff = file.write(chunk)
+            file.write(chunk)
             pbar.update(len(chunk))
         pbar.close()
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        print(Color.RED + 'E: ', e + Color.RESET)
+    print('M: 終了しました')
+    os.system('PAUSE')
