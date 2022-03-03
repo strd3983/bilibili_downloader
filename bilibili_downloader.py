@@ -59,9 +59,9 @@ class Color:
 # メイン関数
 # --------------------------------------------------
 def main():
-    print(Color.BLACK + Color.BG_WHITE + '###############################')
+    print('###############################')
     print('   ビリビリ動画ダウンローダ')
-    print('###############################\n' + Color.RESET)
+    print('###############################\n')
     print('M: マイリスid(ml[数字])または動画id(BV[文字列])を入力\n>> ', end='')
     ml_title, bvids = get_bvid(input())
     print('M: マイリストのタイトル:', ml_title)
@@ -102,7 +102,7 @@ def check_stat(response):
         if response['code'] == 0:
             return
         raise Exception(
-            f'{Color.YELLOW}W: API server returns | Error: {response["code"]}{Color.RESET}')
+            f'W: API server returns | Error: {response["code"]}')
     except Exception as e:
         print(e)
 
@@ -121,7 +121,7 @@ def find_local_cookie():
             continue
         break
     if 'cookies.sqlite' not in fp:
-        print(Color.YELLOW + 'W: cookieを取得できませんでした' + Color.RESET)
+        print('W: cookieを取得できませんでした')
         fp = None
     else:
         print('M: cookieを取得しました')
@@ -170,7 +170,7 @@ def get_bvid(mylist_id):
     if 'BV' in mylist_id:  # 動画idの場合は個別ダウンロード
         return 'Individual', [mylist_id]
     elif 'ml' not in mylist_id:  # 例外処理
-        print(Color.RED + '\nE: リストのidが無効です' + Color.RESET + '\n>> ', end='')
+        print('\nE: リストのidが無効です\n>> ', end='')
         return get_bvid(input())
     url = f'http://api.bilibili.com/x/v3/fav/resource/list?media_id={mylist_id[2:]}&ps=1'
     res = requests.get(url).json()
@@ -200,7 +200,7 @@ def get_durl(bvid, qn, cookies):
     check_stat(res)
     data = res.get('data')  # 動画のメタデータ
     if int(data['quality']) < qn:
-        print(Color.YELLOW + 'W: 指定された画質よりも低い画質がDLされます' + Color.RESET)
+        print('W: 指定された画質よりも低い画質がDLされます')
     dl_info = data['durl'][0]  # ダウンロードするファイル情報
     print('M: ダウンロード画質:', quality_dict.get(data['quality']))
     return video_prop, dl_info
@@ -215,8 +215,9 @@ def download(ml_title, video_prop, dl_info):
     print('M: ダウンロード開始:', title)
     os.makedirs(rel2abs_path(ml_title), exist_ok=True)
     fp = rel2abs_path(os.path.join(ml_title, f'{title}.mp4'))
-    if os.path.isfile(fp):
-        print(Color.YELLOW + 'W: すでにファイルが存在しています' + Color.RESET)
+    if os.path.isfile(fp):  # ファイルの上書きを阻止
+        print('W: すでにファイルが存在しています')
+        return
     with open(fp, 'wb+') as file:
         pbar = tqdm(total=int(dl_info['size']), unit='B', unit_scale=True)
         for chunk in requests.get(
@@ -233,6 +234,6 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as e:
-        print(Color.RED + 'E: ', e + Color.RESET)
+        print('E: ', e)
     print('M: 終了しました')
     os.system('PAUSE')

@@ -1,8 +1,6 @@
-*.flv
-*.spec
-*.ipynb
-/__pycache__/
-/build/
-/browser/
-/bin/
-/my_fav/
+*
+!*.exe
+!*.gitignore
+!*.py
+!Pipfile
+!Pipfile.lock
