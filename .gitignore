@@ -4,3 +4,5 @@
 !*.py
 !Pipfile
 !Pipfile.lock
+!*.md
+!*.ini
