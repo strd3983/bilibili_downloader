@@ -91,21 +91,22 @@ def check_stat(response):
 # PC上に存在するcookieを探索 [入:None 出:cookieのパス]
 # --------------------------------------------------
 def find_local_cookie():
-    fp = os.path.join(os.getenv('APPDATA'), 'Mozilla', 'Firefox', 'Profiles')
-    for cwd, dirs, files in os.walk(fp):
+    filepath = os.path.join(os.getenv('APPDATA'),
+                            'Mozilla', 'Firefox', 'Profiles')
+    for cwd, dirs, files in os.walk(filepath):
         for file in files:
             if 'cookies.sqlite' == file:
-                fp = os.path.join(cwd, file)
+                filepath = os.path.join(cwd, file)
                 break
         else:
             continue
         break
-    if 'cookies.sqlite' not in fp:
+    if 'cookies.sqlite' not in filepath:
         print('W: cookieを取得できませんでした')
-        fp = None
+        filepath = None
     else:
         print('M: cookieを取得しました')
-    return fp
+    return filepath
 
 
 # --------------------------------------------------
@@ -192,21 +193,19 @@ def get_durl(bvid, qn, cookies):
 def download(ml_title, video_prop, dl_info):
     from tqdm import tqdm
     title = f'{video_prop["owner"]["name"]} - {video_prop["title"]}'
-    title = title.replace(os.sep, '').replace('/', ' ')
+    # なぜかopen()でエラーが出るので全角で回避
+    title = title.replace('/', '／').replace('|', '｜').replace('*', '＊')
     print('M: ダウンロード開始:', title)
     os.makedirs(rel2abs_path(ml_title), exist_ok=True)
-    fp = rel2abs_path(os.path.join(ml_title, f'{title}.mp4'))
-    if os.path.isfile(fp):  # ファイルの上書きを阻止
+    filepath = rel2abs_path(os.path.join(ml_title, f'{title}.mp4'))
+    if os.path.isfile(filepath):  # ファイルの上書きを阻止
         print('W: すでにファイルが存在しています')
         return
-    with open(fp, 'wb+') as file:
+    with open(filepath, 'wb') as savefile:
+        res = requests.get(dl_info['url'], headers=headers, stream=True)
         pbar = tqdm(total=int(dl_info['size']), unit='B', unit_scale=True)
-        for chunk in requests.get(
-                dl_info['url'],
-                headers=headers,
-                stream=True).iter_content(
-                chunk_size=1024):
-            file.write(chunk)
+        for chunk in res.iter_content(chunk_size=1024):
+            savefile.write(chunk)
             pbar.update(len(chunk))
         pbar.close()
 
