@@ -41,8 +41,13 @@ def main():
     ml_title, bvids = get_bvid(input())
     print('M: マイリストのタイトル:', ml_title)
     print('M: ダウンロードする動画数:', len(bvids))
-    print('M: ダウンロードする画質:', list(quality_dict)[0:8], '\n >> ', end='')
+    print('M: ダウンロードする画質:',
+          ', '.join(list(quality_dict)[0:8]), '\n >> ',
+          end='')
     ql = input()
+    while quality_dict.get(ql) is None:
+        print('\nE: 画質の指定に失敗\n >> ', end='')
+        ql = input()
     print()
     cookies = get_cookie()
     print('###############################')
@@ -187,6 +192,7 @@ def get_durl(bvid, qn, cookies):
 def download(ml_title, video_prop, dl_info):
     from tqdm import tqdm
     title = f'{video_prop["owner"]["name"]} - {video_prop["title"]}'
+    title = title.replace(os.sep, '').replace('/', ' ')
     print('M: ダウンロード開始:', title)
     os.makedirs(rel2abs_path(ml_title), exist_ok=True)
     fp = rel2abs_path(os.path.join(ml_title, f'{title}.mp4'))
