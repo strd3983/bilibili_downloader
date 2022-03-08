@@ -62,15 +62,15 @@ def main():
 
 
 # --------------------------------------------------
-# 絶対パスを相対パスに [入:相対パス, 出:絶対パス]
+# 絶対パスを相対パスに [入:相対パス, 実行ファイル側or展開フォルダ側 出:絶対パス]
 # --------------------------------------------------
-def rel2abs_path(filename):
-    if getattr(sys, 'frozen', False):
-        # The application is frozen
-        datadir = os.path.dirname(sys.executable)
-    else:
-        # The application is not frozen
+def rel2abs_path(filename, attr):
+    if attr == 'temp':  # 展開先フォルダと同階層
         datadir = os.path.dirname(__file__)
+    elif attr == 'exe':  # exeファイルと同階層の絶対パス
+        datadir = os.path.dirname(sys.argv[0])
+    else:
+        raise print(f'E: 相対パスの引数ミス [{attr}]')
     return os.path.join(datadir, filename)
 
 
@@ -196,8 +196,8 @@ def download(ml_title, video_prop, dl_info):
     # なぜかopen()でエラーが出るので全角で回避
     title = title.replace('/', '／').replace('|', '｜').replace('*', '＊')
     print('M: ダウンロード開始:', title)
-    os.makedirs(rel2abs_path(ml_title), exist_ok=True)
-    filepath = rel2abs_path(os.path.join(ml_title, f'{title}.mp4'))
+    os.makedirs(rel2abs_path(ml_title, 'exe'), exist_ok=True)
+    filepath = rel2abs_path(os.path.join(ml_title, f'{title}.mp4'), 'exe')
     if os.path.isfile(filepath):  # ファイルの上書きを阻止
         print('W: すでにファイルが存在しています')
         return

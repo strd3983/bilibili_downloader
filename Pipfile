@@ -13,7 +13,6 @@ tqdm = "*"
 autopep8 = "*"
 flake8 = "*"
 mypy = "*"
-ipykernel = "*"
 
 [requires]
 python_version = "3.10"
