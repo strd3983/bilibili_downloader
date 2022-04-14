@@ -1,4 +1,5 @@
 import requests
+import re
 import os
 import sys
 import time
@@ -44,7 +45,7 @@ def main():
     print('M: ダウンロードする画質:',
           ', '.join(list(quality_dict)[0:8]), '\n >> ',
           end='')
-    ql = input()
+    ql = re.sub(r'[^0-9pK+]', '', input())
     while quality_dict.get(ql) is None:
         print('\nE: 画質の指定に失敗\n >> ', end='')
         ql = input()
@@ -71,7 +72,7 @@ def rel2abs_path(filename, attr):
         datadir = os.path.dirname(sys.argv[0])
     else:
         raise print(f'E: 相対パスの引数ミス [{attr}]')
-    return os.path.join(datadir, filename)
+    return os.path.join(datadir, filename).replace(os.path.sep, '/')
 
 
 # --------------------------------------------------
@@ -148,6 +149,8 @@ def get_cookie():
 # マイリスから動画のリストを取得 [入:マイリスのid 出:マイリス名、ビデオid]
 # --------------------------------------------------
 def get_bvid(mylist_id):
+    mylist_id = re.sub(r'[^0-9a-zA-Z]', '', mylist_id)
+    print(mylist_id)
     if 'BV' in mylist_id:  # 動画idの場合は個別ダウンロード
         return 'Individual', [mylist_id]
     elif 'ml' not in mylist_id:  # 例外処理
@@ -157,6 +160,7 @@ def get_bvid(mylist_id):
     res = requests.get(url).json()
     check_stat(res)
     ml_title = res['data']['info']['title']  # マイリストの名前
+    ml_title = re.sub(r'[\\|/|:|?|.|"|<|>|\|]', ' ', ml_title)
     url = f'http://api.bilibili.com/x/v3/fav/resource/ids?media_id={mylist_id[2:]}'
     res = requests.get(url).json()
     check_stat(res)
@@ -193,15 +197,14 @@ def get_durl(bvid, qn, cookies):
 def download(ml_title, video_prop, dl_info):
     from tqdm import tqdm
     title = f'{video_prop["owner"]["name"]} - {video_prop["title"]}'
-    # なぜかopen()でエラーが出るので全角で回避
-    title = title.replace('/', '／').replace('|', '｜').replace('*', '＊')
+    title = re.sub(r'[\\|/|:|?|"|<|>|\|]', ' ', title)  # ファイル名に使えない文字を削除
     print('M: ダウンロード開始:', title)
     os.makedirs(rel2abs_path(ml_title, 'exe'), exist_ok=True)
-    filepath = rel2abs_path(os.path.join(ml_title, f'{title}.mp4'), 'exe')
-    if os.path.isfile(filepath):  # ファイルの上書きを阻止
+    fp = rel2abs_path(os.path.join(ml_title, f'{title}.flv'), 'exe')
+    if os.path.isfile(fp):  # ファイルの上書きを阻止
         print('W: すでにファイルが存在しています')
         return
-    with open(filepath, 'wb') as savefile:
+    with open(fp, 'wb') as savefile:
         res = requests.get(dl_info['url'], headers=headers, stream=True)
         pbar = tqdm(total=int(dl_info['size']), unit='B', unit_scale=True)
         for chunk in res.iter_content(chunk_size=1024):
