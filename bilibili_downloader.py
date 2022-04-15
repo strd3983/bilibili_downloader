@@ -4,6 +4,7 @@ import os
 import sys
 import time
 
+
 headers = {
     'referer': 'https://www.bilibili.com',
     'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko)\
@@ -149,18 +150,17 @@ def get_cookie():
 # マイリスから動画のリストを取得 [入:マイリスのid 出:マイリス名、ビデオid]
 # --------------------------------------------------
 def get_bvid(mylist_id):
-    mylist_id = re.sub(r'[^0-9a-zA-Z]', '', mylist_id)
-    print(mylist_id)
     if 'BV' in mylist_id:  # 動画idの場合は個別ダウンロード
-        return 'Individual', [mylist_id]
+        return 'Individual', re.findall(r'BV[A-Za-z0-9]+', mylist_id)
     elif 'ml' not in mylist_id:  # 例外処理
         print('\nE: リストのidが無効です\n>> ', end='')
         return get_bvid(input())
+    mylist_id = re.findall(r'BV[A-Za-z0-9]+', mylist_id)[0]
     url = f'http://api.bilibili.com/x/v3/fav/resource/list?media_id={mylist_id[2:]}&ps=1'
     res = requests.get(url).json()
     check_stat(res)
     ml_title = res['data']['info']['title']  # マイリストの名前
-    ml_title = re.sub(r'[\\|/|:|?|.|"|<|>|\|]', ' ', ml_title)
+    ml_title = re.sub(r'[\\|/|:|?|.|"|<|>]', ' ', ml_title)
     url = f'http://api.bilibili.com/x/v3/fav/resource/ids?media_id={mylist_id[2:]}'
     res = requests.get(url).json()
     check_stat(res)
@@ -177,6 +177,10 @@ def get_bvid(mylist_id):
 def get_durl(bvid, qn, cookies):
     url = f'https://api.bilibili.com/x/web-interface/view?bvid={bvid}'
     res = requests.get(url).json()
+    if res['code'] == -404:  # 日本からアクセスを拒否されているものを回避
+        print('M: プロキシ鯖を経由')
+        url = f'http://www.ekamali.com/index.php?q={url}&hl=3c0'
+        res = requests.get(url).json()
     check_stat(res)
     video_prop = res['data']
     cid = res['data']['cid']  # ダウンロードするビデオの固有id
