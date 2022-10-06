@@ -8,11 +8,14 @@ nuitka = "*"
 zstandard = "*"
 requests = "*"
 tqdm = "*"
+types-requests = "*"
+ordered-set = "*"
 
 [dev-packages]
-autopep8 = "*"
 flake8 = "*"
 mypy = "*"
+black = "*"
+isort = "*"
 
 [requires]
 python_version = "3.10"
