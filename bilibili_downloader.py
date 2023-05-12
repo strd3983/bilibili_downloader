@@ -2,7 +2,7 @@ import os
 import re
 import sys
 import time
-from typing import Dict, Tuple, cast
+from typing import Dict, List, Tuple, cast
 
 import requests
 
@@ -54,14 +54,21 @@ def main():
     print()
     cookies = get_cookie()
     print("###############################")
+    error_bvid: List[str] = ["error_BVids"]
     for bvid in bvids:
         print()
         print("###--------------------------------------###")
-        video_prop, dl_info = get_durl(bvid, quality_dict[ql], cookies)
-        download(ml_title, video_prop, dl_info)
+        try:
+            video_prop, dl_info = get_durl(bvid, quality_dict[ql], cookies)
+            download(ml_title, video_prop, dl_info)
+        except Exception:
+            error_bvid.append(bvid)
         print(f"M: {TIME}秒待機中...")
         time.sleep(TIME)
         print("###--------------------------------------###")
+    # write error bvid to txt log
+    with open(rel2abs_path("log.txt", "exe"), "w") as f:
+        print(bvid, file=f)
 
 
 # --------------------------------------------------
