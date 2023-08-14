@@ -60,7 +60,7 @@ jobs:
     needs: create-release
     strategy:
       matrix:
-        os: [windows-latest, ubuntu-latest, macOS-latest]
+        os: [windows-latest, ubuntu-latest]
         include:
         - os: windows-latest
           goos: win
@@ -70,10 +70,6 @@ jobs:
           goos: linux
           build_args:
           comp_cmd: zip concat.zip *.bin setting.*
-        - os: macOS-latest
-          goos: darwin
-          build_args: --macos-create-app-bundle --macos-app-version=v${{ needs.create-release.outputs.release_tag }}
-          comp_cmd: zip concat.zip *.app setting.*
 
     runs-on: ${{ matrix.os }}
     steps:

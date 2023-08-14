@@ -6,6 +6,8 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.txt
+ffmpeg*
 
 # C extensions
 *.so

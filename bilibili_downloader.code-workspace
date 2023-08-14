@@ -1,42 +1,37 @@
 {
-	"folders": [
-		{
-			"path": "."
-		}
-	],
-	"settings": {
-		"python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe",
-		"python.autoComplete.extraPaths": [
-			"{$workspaceFolder}/.venv/Lib/site-packages",
-		],
-		"python.analysis.extraPaths": [
-			"{$workspaceFolder}/.venv/Lib/site-packages"
-		],
-		"python.analysis.completeFunctionParens": true,
-		"python.formatting.provider": "black", // フォーマッターをblackに設定
-		"python.linting.pylintEnabled": false, //　pyLintをオフに
-		"python.linting.flake8Enabled": true, // flake8をオンに
-		"python.linting.enabled": true, // リンターを有効に
-		"python.linting.lintOnSave": true, // 保存時にリンターが効くように
-		"editor.formatOnSave": true, // 保存時にフォーマットをオンに
-		"editor.formatOnType": true, // タイピング時にフォーマットをオンに
-		"editor.formatOnPaste": false, // 貼り付け時のフォーマットはオフに
-		"python.terminal.activateEnvironment": true,
-		"python.formatting.blackArgs": [
-			"--line-length",
-			"119"
-		],
-		"python.linting.flake8Args": [
-			"--max-line-length",
-			"119",
-			"--extend-ignore",
-			"E203",
-		],
-		"python.linting.mypyArgs": [
-			"--ignore-missing-imports",
-			"--follow-imports=silent",
-			"--show-column-numbers",
-			"--check-untyped-defs"
-		]
-	}
+  "folders": [
+    {
+      "path": "."
+    }
+  ],
+  "settings": {
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe",
+    "python.autoComplete.extraPaths": [
+      "{$workspaceFolder}/.venv/Lib/site-packages",
+    ],
+    "python.analysis.extraPaths": [
+      "{$workspaceFolder}/.venv/Lib/site-packages"
+    ],
+    "python.analysis.completeFunctionParens": true,
+    "editor.formatOnSave": true, // 保存時にフォーマットをオンに
+    "editor.formatOnType": true, // タイピング時にフォーマットをオンに
+    "editor.formatOnPaste": false, // 貼り付け時のフォーマットはオフに
+    "python.terminal.activateEnvironment": true,
+    "black-formatter.args": [
+      "--line-length",
+      "119"
+    ],
+    "flake8.args": [
+      "--max-line-length",
+      "119",
+      "--extend-ignore",
+      "E203",
+    ],
+    "mypy-type-checker.args": [
+      "--ignore-missing-imports",
+      "--follow-imports=silent",
+      "--show-column-numbers",
+      "--check-untyped-defs"
+    ]
+  }
 }
