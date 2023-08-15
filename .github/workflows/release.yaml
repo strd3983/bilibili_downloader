@@ -6,13 +6,15 @@ on:
       - main
 
 jobs:
-  create-tag:
-    name: Create a Tag
+  create-release:
+    name: Create Release
     outputs:
       release_tag: ${{ steps.release_tag.outputs.release_tag }}
+      today: ${{ steps.release_tag.outputs.today }}
+      upload_url: ${{ steps.create_release.outputs.upload_url}}
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      TZ: 'Asia/Tokyo'
+      TZ: "Asia/Tokyo"
 
     runs-on: ubuntu-latest
     steps:
@@ -24,10 +26,11 @@ jobs:
           echo "pre_tag=$(curl -H 'Accept: application/vnd.github.v3+json' -H 'Authorization: token ${{ secrets.GITHUB_TOKEN }}' https://api.github.com/repos/${{ github.repository }}/releases/latest | jq -r .tag_name)" >> $GITHUB_OUTPUT
 
       # タグを生成する 「{YYYY.MM.DD}」
-      - name: Generate Release Tag
+      - name: Generate Tag
         id: release_tag
         run: |
           today=$(date +'%Y.%m.%d')
+          echo "today=$today" >> $GITHUB_OUTPUT
           echo "release_tag=v$today" >> $GITHUB_OUTPUT
 
       - name: Delete Existing Tag
@@ -38,22 +41,13 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           delete_release: true
 
-  create-release:
-    name: Setup Release
-    needs: create-tag
-    outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url}}
-      release_tag: ${{ needs.create-tag.outputs.release_tag }}
-
-    runs-on: ubuntu-latest
-    steps:
-    - name: Create Release
-      id: create_release
-      uses: softprops/action-gh-release@v1
-      with:
-        name: ${{ needs.create-tag.outputs.release_tag }}
-        tag_name: ${{ needs.create-tag.outputs.release_tag }}
-        generate_release_notes: true
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: ${{ steps.release_tag.outputs.release_tag }}
+          tag_name: ${{ steps.release_tag.outputs.release_tag }}
+          generate_release_notes: true
 
   release-binary:
     name: Build and Release Binary
@@ -62,49 +56,52 @@ jobs:
       matrix:
         os: [windows-latest, ubuntu-latest]
         include:
-        - os: windows-latest
-          goos: win
-          build_args:
-          comp_cmd: powershell Compress-Archive *.exe,setting.* concat.zip
-        - os: ubuntu-latest
-          goos: linux
-          build_args:
-          comp_cmd: zip concat.zip *.bin setting.*
+          - os: windows-latest
+            goos: win
+            comp_cmd: powershell Compress-Archive *.exe,setting.* concat.zip
+          - os: ubuntu-latest
+            goos: linux
+            comp_cmd: zip concat.zip *.bin setting.*
 
     runs-on: ${{ matrix.os }}
     steps:
-    # Buid EXE files
-    - name: Checkout Repository
-      uses: actions/checkout@v3
+      # Buid EXE files
+      - name: Checkout Repository
+        uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
+      - name: Set Version
+        run: |
+          fp=bilibili_downloader.py
+          sed -i -e "/__version__ =/c __version__ = '${{ needs.create-release.outputs.today }}'" ${fp}
 
-    - name: Install Pipenv
-      run: |
-        pip install --upgrade pip
-        pip install pipenv
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
 
-    - name: Install Dependencies
-      run: pipenv install --skip-lock --system
+      - name: Install Pipenv
+        run: |
+          pip install --upgrade pip
+          pip install pipenv
 
-    - name: Build with Nuitka
-      run: python -m nuitka --standalone --onefile --assume-yes-for-downloads ${{ matrix.build_args }} bilibili_downloader.py
+      - name: Install Dependencies
+        run: pipenv install --skip-lock --system
 
-    # Make a zip file
-    - name: Make ZIP files on Windows
-      run: ${{ matrix.comp_cmd }}
+      - name: Build with Nuitka
+        run: python -m nuitka --standalone --onefile --assume-yes-for-downloads bilibili_downloader.py
 
-    # Upload EXE files
-    - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1.0.1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Make a zip file
+      - name: Make ZIP files on Windows
+        run: ${{ matrix.comp_cmd }}
 
-      with:
-        upload_url: ${{ needs.create-release.outputs.upload_url }}
-        asset_path: ./concat.zip
-        asset_name: BiDown_${{ needs.create-release.outputs.release_tag }}_${{ matrix.goos }}.zip
-        asset_content_type: application/octet-stream
+      # Upload EXE files
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1.0.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./concat.zip
+          asset_name: BiDown_${{ needs.create-release.outputs.today }}_${{ matrix.goos }}.zip
+          asset_content_type: application/octet-stream

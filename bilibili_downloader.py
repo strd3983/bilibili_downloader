@@ -9,6 +9,8 @@ from typing import Tuple, cast
 import requests
 from tqdm import tqdm
 
+__version__ = "XXXX.XX.XX"
+
 headers: dict = {
     "referer": "https://www.bilibili.com",
     "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)\
@@ -42,6 +44,7 @@ def main() -> None:
 
     print("\n###############################")
     print("   ビリビリ動画ダウンローダ")
+    print(f"    version: {__version__}")
     print("###############################\n")
     check_ffmpeg()
     cookies = get_cookie()
