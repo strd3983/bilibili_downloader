@@ -62,8 +62,8 @@ def main() -> None:
         while quality_dict.get(ql) is None:
             print("[E] 画質の指定に失敗. 再度入力\n >> ", end="")
             ql = input()
-        print("###--------------------------------------###")
-        for bvid in bvids:
+        for i, bvid in enumerate(bvids):
+            print(f"###----------------{i+1}/{len(bvids)}----------------###")
             try:
                 video_prop, dl_info = get_content(bvid, quality_dict[ql], cookies)
                 download(ml_title, video_prop, dl_info)
@@ -71,11 +71,11 @@ def main() -> None:
                 error_bvid.append(bvid)
             print(f"[M] {TIME}秒待機中...")
             time.sleep(TIME)
-            print("###--------------------------------------###")
+        print("###--------------------------------------###")
     # write error bvid to txt log
     if len(error_bvid) != 1:
         with open(rel2abs_path("error_log.txt", "exe"), "w", encoding="UTF-8") as f:
-            print(error_bvid, file=f)
+            print(*error_bvid, file=f)
 
 
 def rel2abs_path(filename: str, attr: str) -> str:
@@ -350,7 +350,6 @@ def download(ml_title: str, video_prop: dict, dl_info: dict) -> None:
     os.replace(fp_merge, fp)
     os.remove(fp_video)
     os.remove(fp_audio)
-    os.remove(fp_merge)
 
 
 if __name__ == "__main__":
