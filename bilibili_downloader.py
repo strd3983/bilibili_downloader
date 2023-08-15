@@ -1,4 +1,4 @@
-import glob
+﻿import glob
 import os
 import re
 import subprocess as sb
@@ -60,7 +60,7 @@ def main() -> None:
         print(" >> ", end="")
         ql = re.sub(r"[^0-9pK+]", "", input())
         while quality_dict.get(ql) is None:
-            print("\nE: 画質の指定に失敗. 再度入力\n >> ", end="")
+            print("[E] 画質の指定に失敗. 再度入力\n >> ", end="")
             ql = input()
         print("###--------------------------------------###")
         for bvid in bvids:

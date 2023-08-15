@@ -58,9 +58,15 @@ jobs:
         include:
           - os: windows-latest
             goos: win
+            sed_cmd: |
+              $buf = Get-Content -Encoding UTF8 .\bilibili_downloader.py | % { $_ -replace "XXXX.XX.XX","${{ needs.create-release.outputs.today }}" }
+              $buf | Out-File -Encoding UTF8 .\bilibili_downloader.py
             comp_cmd: powershell Compress-Archive *.exe,setting.* concat.zip
           - os: ubuntu-latest
             goos: linux
+            sed_cmd: |
+              fp=bilibili_downloader.py
+              sed -i -e "/__version__ =/c __version__ = '${{ needs.create-release.outputs.today }}'" ${fp}
             comp_cmd: zip concat.zip *.bin setting.*
 
     runs-on: ${{ matrix.os }}
@@ -70,9 +76,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Set Version
-        run: |
-          fp=bilibili_downloader.py
-          sed -i -e "/__version__ =/c __version__ = '${{ needs.create-release.outputs.today }}'" ${fp}
+        run: ${{ matrix.sed_cmd }}
 
       - name: Set up Python
         uses: actions/setup-python@v4
