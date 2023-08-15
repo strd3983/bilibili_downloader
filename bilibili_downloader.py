@@ -23,7 +23,6 @@ quality_dict: dict = {
     "720p": 64,
     "480p": 32,
     "360p": 16,
-    120: "4K",
     116: "1080p60",
     74: "720p60",
     112: "1080p+",
@@ -160,7 +159,7 @@ def check_ffmpeg() -> None:
         os.rename(dir, rel2abs_path("ffmpeg", "exe"))
         # check again
         ffmpeg = glob.glob(rel2abs_path("ffmpeg/bin/ffmpeg*", "exe"), recursive=True)
-        assert ffmpeg, "E: 自動ダウンロード失敗. ffmpegをダウンロードしてffmpegフォルダ内に配置してください."
+        assert ffmpeg, "[E] 自動ダウンロード失敗. ffmpegをダウンロードしてffmpegフォルダ内に配置してください."
 
     os.environ["PATH"] = f"{os.path.dirname(ffmpeg[0])};{os.environ['PATH']}"
 
@@ -240,7 +239,7 @@ def get_bvid(mylist_id: str) -> tuple[str, list]:
     if "BV" in mylist_id:  # 動画idの場合は個別ダウンロード
         return "Individual", re.findall(r"BV[A-Za-z0-9]+", mylist_id)
     elif "ml" not in mylist_id:  # 例外処理
-        print("E: リストのidが無効です. 再度入力してください.")
+        print("[E] リストのidが無効です. 再度入力してください.")
         return get_bvid(input(" >> "))
     mylist_id = re.findall(r"ml[A-Za-z0-9]+", mylist_id)[0]
     url = f"http://api.bilibili.com/x/v3/fav/resource/list?media_id={mylist_id[2:]}&ps=1"
@@ -319,9 +318,9 @@ def download(ml_title: str, video_prop: dict, dl_info: dict) -> None:
     title = f'{video_prop["owner"]["name"]} - {video_prop["title"]}'
     title = re.sub(unuse_str, " ", title)  # ファイル名に使えない文字を削除
     fp = rel2abs_path(os.path.join(ml_title, f"{title}.mp4"), "exe")
-    fp_video = rel2abs_path(os.path.join(ml_title, "video.m4s"), "exe")
-    fp_audio = rel2abs_path(os.path.join(ml_title, "audio.m4s"), "exe")
-    fp_out = rel2abs_path(os.path.join(ml_title, "output.mp4"), "exe")
+    fp_video = rel2abs_path(os.path.join("video.m4s"), "exe")
+    fp_audio = rel2abs_path(os.path.join("audio.m4s"), "exe")
+    fp_merge = rel2abs_path(os.path.join("merge.mp4"), "exe")
 
     # ファイルの上書きを阻止
     if os.path.isfile(fp):
@@ -344,10 +343,11 @@ def download(ml_title: str, video_prop: dict, dl_info: dict) -> None:
             pbar.close()
 
     # merge video and audio files into single mp4 file
-    sb.run(f"ffmpeg -i {fp_video} -i {fp_audio} -c:v copy -c:a copy -f mp4 -loglevel quiet {fp_out}")
-    os.rename(fp_out, fp)
+    sb.run(f"ffmpeg -i {fp_video} -i {fp_audio} -c:v copy -c:a copy -f mp4 -loglevel quiet {fp_merge}")
+    os.replace(fp_merge, fp)
     os.remove(fp_video)
     os.remove(fp_audio)
+    os.remove(fp_merge)
 
 
 if __name__ == "__main__":
