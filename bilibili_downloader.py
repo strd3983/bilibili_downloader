@@ -198,6 +198,7 @@ def get_cookie() -> dict:
     import shutil
     import sqlite3
     import tempfile
+    from json import JSONDecodeError
 
     cookiefile = find_local_cookie()
     if cookiefile is None:
@@ -225,11 +226,19 @@ def get_cookie() -> dict:
     bilibili_cookies = dict(zip(names, values))
 
     # display username who logged in
-    url = "https://api.bilibili.com/nav"
-    res = requests.get(url, cookies=bilibili_cookies, headers=headers).json()
-    check_stat(res)
-    print("[M]", res["data"]["uname"], "としてログイン")
-    return bilibili_cookies
+    url = "https://api.bilibili.com/x/web-interface/nav"
+    try:
+        res = requests.get(url, cookies=bilibili_cookies, headers=headers).json()
+        check_stat(res)
+        print("[M]", res["data"]["uname"], "としてログイン")
+    except JSONDecodeError:
+        print("[W] サブのurlが使用されます")
+        url = "https://api.bilibili.com/nav"
+        res = requests.get(url, cookies=bilibili_cookies, headers=headers).json()
+        check_stat(res)
+        print("[M]", res["data"]["uname"], "としてログイン")
+    finally:
+        return bilibili_cookies
 
 
 def get_bvid(mylist_id: str) -> tuple[str, list]:

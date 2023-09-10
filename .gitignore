@@ -8,6 +8,7 @@ __pycache__/
 *$py.class
 *.txt
 ffmpeg*
+**/
 
 # C extensions
 *.so
