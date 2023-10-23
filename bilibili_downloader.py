@@ -1,16 +1,19 @@
-﻿import glob
+import glob
 import os
 import re
+import shutil
 import subprocess as sb
 import sys
 import time
+from functools import partial
 from typing import Tuple, cast
 
 import requests
-from tqdm import tqdm
+from tqdm import tqdm as std_tqdm
 
 __version__ = "XXXX.XX.XX"
 
+tqdm = partial(std_tqdm, dynamic_ncols=True)
 headers: dict = {
     "referer": "https://www.bilibili.com",
     "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)\
@@ -46,6 +49,7 @@ def main() -> None:
     print("   ビリビリ動画ダウンローダ")
     print(f"    version: {__version__}")
     print("###############################\n")
+    check_version()
     check_ffmpeg()
     cookies = get_cookie()
     error_bvid: list[str] = ["前回失敗した動画id"]
@@ -67,7 +71,8 @@ def main() -> None:
             try:
                 video_prop, dl_info = get_content(bvid, quality_dict[ql], cookies)
                 download(ml_title, video_prop, dl_info)
-            except Exception:
+            except Exception as e:
+                print(f"[E] {e}")
                 error_bvid.append(bvid)
             print(f"[M] {TIME}秒待機中...")
             time.sleep(TIME)
@@ -80,7 +85,7 @@ def main() -> None:
 
 def rel2abs_path(filename: str, attr: str) -> str:
     """
-    絶対パスを相対パスに [入:相対パス, 実行ファイル側or展開フォルダ側 出:絶対パス]
+    絶対パスを相対パスに [入:相対パス, exe側 or temp側 出:絶対パス]
     """
 
     if attr == "temp":  # 展開先フォルダと同階層
@@ -165,6 +170,22 @@ def check_ffmpeg() -> None:
         assert ffmpeg, "[E] 自動ダウンロード失敗. ffmpegをダウンロードしてffmpegフォルダ内に配置してください."
 
     os.environ["PATH"] = f"{os.path.dirname(ffmpeg[0])};{os.environ['PATH']}"
+
+
+def check_version() -> None:
+    from datetime import date
+
+    try:
+        response = requests.get("https://api.github.com/repos/strd3983/bilibili_downloader/releases/latest")
+        tag = response.json()["name"]
+        latest = date(*[int(x) for x in tag[1:].split(".")])
+        now = date(*[int(x) for x in __version__.split(".")])
+
+        if now < latest:
+            print(f"[W] ソフトウェアのアップデートが可能です: v{__version__} -> {tag}")
+            print("[W] https://github.com/strd3983/bilibili_downloader/releases/latest")
+    except Exception as e:
+        print(f"[E] {e}")
 
 
 def find_local_cookie() -> str:
@@ -330,9 +351,9 @@ def download(ml_title: str, video_prop: dict, dl_info: dict) -> None:
     title = f'{video_prop["owner"]["name"]} - {video_prop["title"]}'
     title = re.sub(unuse_str, " ", title)  # ファイル名に使えない文字を削除
     fp = rel2abs_path(os.path.join(ml_title, f"{title}.mp4"), "exe")
-    fp_video = rel2abs_path(os.path.join("video.m4s"), "exe")
-    fp_audio = rel2abs_path(os.path.join("audio.m4s"), "exe")
-    fp_merge = rel2abs_path(os.path.join("merge.mp4"), "exe")
+    fp_video = rel2abs_path(os.path.join("video.m4s"), "temp")
+    fp_audio = rel2abs_path(os.path.join("audio.m4s"), "temp")
+    fp_merge = rel2abs_path(os.path.join("merge.mp4"), "temp")
 
     # ファイルの上書きを阻止
     if os.path.isfile(fp):
@@ -356,7 +377,7 @@ def download(ml_title: str, video_prop: dict, dl_info: dict) -> None:
 
     # merge video and audio files into single mp4 file
     sb.run(f"ffmpeg -i {fp_video} -i {fp_audio} -c:v copy -c:a copy -f mp4 -loglevel quiet {fp_merge}")
-    os.replace(fp_merge, fp)
+    shutil.move(fp_merge, fp)
     os.remove(fp_video)
     os.remove(fp_audio)
 
