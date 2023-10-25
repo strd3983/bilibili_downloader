@@ -28,6 +28,7 @@ quality_dict: dict = {
     "720p": 64,
     "480p": 32,
     "360p": 16,
+    "mp3": 0,
     116: "1080p60",
     74: "720p60",
     112: "1080p+",
@@ -60,9 +61,10 @@ def main() -> None:
             break
         print("[M] マイリストのタイトル:", ml_title)
         print("[M] ダウンロードする動画数:", len(bvids))
-        print("[M] ダウンロードする画質:", *list(quality_dict.keys())[:7])
+        print("[M] ダウンロードする画質:", *list(quality_dict.keys())[:8])
+        print("[M] mp3を指定すると音声ファイルのみがダウンロード")
         print(" >> ", end="")
-        ql = re.sub(r"[^0-9pK+]", "", input())
+        ql = re.sub(r"[^0-9ampK+]", "", input())
         while quality_dict.get(ql) is None:
             print("[E] 画質の指定に失敗. 再度入力\n >> ", end="")
             ql = input()
@@ -70,7 +72,7 @@ def main() -> None:
             print(f"###----------------{i+1}/{len(bvids)}----------------###")
             try:
                 video_prop, dl_info = get_content(bvid, quality_dict[ql], cookies)
-                download(ml_title, video_prop, dl_info)
+                download(ml_title, video_prop, dl_info, ql)
             except Exception as e:
                 print(f"[E] {e}")
                 error_bvid.append(bvid)
@@ -321,6 +323,8 @@ def check_quality(data: dict, qn: int) -> tuple:
     # video
     video = data["dash"]["video"][0]
     audio = data["dash"]["audio"][0]
+    if qn == 0:
+        return video, audio
     for v in data["dash"]["video"]:
         # 指定した画質以外は無視
         if v["id"] != qn:
@@ -341,26 +345,39 @@ def check_quality(data: dict, qn: int) -> tuple:
     return video, audio
 
 
-def download(ml_title: str, video_prop: dict, dl_info: dict) -> None:
+def download(ml_title: str, video_prop: dict, dl_info: dict, ql: str) -> None:
     """
     動画のダウンロード [入:マイリス名、ビデオのメタデータ、ダウンロード用メタデータ 出:None]
     """
 
-    # setup title and directory
+    # setup directory
     os.makedirs(rel2abs_path(ml_title, "exe"), exist_ok=True)
-    title = f'{video_prop["owner"]["name"]} - {video_prop["title"]}'
-    title = re.sub(unuse_str, " ", title)  # ファイル名に使えない文字を削除
-    fp = rel2abs_path(os.path.join(ml_title, f"{title}.mp4"), "exe")
+    # temp files
     fp_video = rel2abs_path(os.path.join("video.m4s"), "temp")
     fp_audio = rel2abs_path(os.path.join("audio.m4s"), "temp")
-    fp_merge = rel2abs_path(os.path.join("merge.mp4"), "temp")
+    if ql in ["mp3", "m4a"]:
+        suffix = ql
+        fps = [fp_audio]
+        dl_info = [dl_info[1]]
+        fp_merge = rel2abs_path(os.path.join(f"merge.{suffix}"), "temp")
+        cmd = f"ffmpeg -i {fp_audio} -ab {dl_info[0]['bandwidth']} -f {suffix} {fp_merge}"
+    else:
+        suffix = "mp4"
+        fps = [fp_video, fp_audio]
+        fp_merge = rel2abs_path(os.path.join(f"merge.{suffix}"), "temp")
+        cmd = f"ffmpeg -i {fp_video} -i {fp_audio} -c:v copy -c:a copy -f {suffix} {fp_merge}"
+    # output path
+    fname = f"{video_prop['owner']['name']} - {video_prop['title']}"
+    fname = re.sub(unuse_str, " ", fname)  # ファイル名に使えない文字を削除
+    fp = rel2abs_path(os.path.join(ml_title, f"{fname}.{suffix}"), "exe")
 
     # ファイルの上書きを阻止
     if os.path.isfile(fp):
         print("[W] すでにファイルが存在しています")
         return
 
-    for data, f in zip(dl_info, [fp_video, fp_audio]):
+    # download
+    for data, f in zip(dl_info, fps):
         res = requests.get(data["baseUrl"], headers=headers, stream=True)
         pbar = tqdm(
             total=int(res.headers.get("content-length", 0)),
@@ -375,11 +392,42 @@ def download(ml_title: str, video_prop: dict, dl_info: dict) -> None:
                 pbar.update(len(chunk))
             pbar.close()
 
-    # merge video and audio files into single mp4 file
-    sb.run(f"ffmpeg -i {fp_video} -i {fp_audio} -c:v copy -c:a copy -f mp4 -loglevel quiet {fp_merge}")
-    shutil.move(fp_merge, fp)
-    os.remove(fp_video)
-    os.remove(fp_audio)
+    # merge and convert web files into mp4 or mp3 file
+    print("[M] ファイルを変換中...")
+    sb.run(cmd + " -loglevel quiet")
+
+    # tagging audio
+    if ql == "mp3":
+        tag2mp3(fp_merge, video_prop)
+
+    try:
+        shutil.move(fp_merge, fp)
+        os.remove(fp_audio)
+        os.remove(fp_video)
+    except Exception:
+        pass
+
+
+def tag2mp3(fp: str, prop: dict) -> None:
+    from mutagen.id3 import APIC, ID3, TIT2, TPE1, error
+    from mutagen.mp3 import MP3
+
+    audio = MP3(fp, ID3=ID3)
+
+    try:
+        audio.add_tags()
+    except error:
+        pass
+
+    # title
+    audio.tags.add(TIT2(encoding=3, text=prop["title"]))
+    # artist
+    audio.tags.add(TPE1(encoding=3, text=prop["owner"]["name"]))
+    # cover art
+    print("[M] サムネイルをダウンロード中...")
+    response = requests.get(prop["pic"])
+    audio.tags.add(APIC(encoding=3, mime="image/jpeg", type=3, desc="Cover", data=response.content))
+    audio.save()
 
 
 if __name__ == "__main__":
