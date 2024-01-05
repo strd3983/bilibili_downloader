@@ -53,11 +53,11 @@ def main() -> None:
     check_version()
     check_ffmpeg()
     cookies = get_cookie()
-    error_bvid: list[str] = ["前回失敗した動画id"]
+    error_bvid: list[str] = ["前回失敗した動画id (コピペで一括再DL)"]
     while True:
         print("[M] マイリスid: ml[数字] または動画id: BV[文字列] を入力. 終了する場合はexitを入力.")
-        ml_title, bvids = get_bvid(input(" >> "))
-        if ml_title is None and bvids is None:
+        ml_title, bvids = get_bvids(input(" >> "))
+        if ml_title == "" and bvids == []:
             break
         print("[M] マイリストのタイトル:", ml_title)
         print("[M] ダウンロードする動画数:", len(bvids))
@@ -69,15 +69,17 @@ def main() -> None:
             print("[E] 画質の指定に失敗. 再度入力\n >> ", end="")
             ql = input()
         for i, bvid in enumerate(bvids):
-            print(f"###----------------{i+1}/{len(bvids)}----------------###")
+            print(f"###--------------| {i+1}/{len(bvids)} |--------------###")
             try:
-                video_prop, dl_info = get_content(bvid, quality_dict[ql], cookies)
-                download(ml_title, video_prop, dl_info, ql)
+                video_props = get_cids(bvid)
+                for video_prop in video_props:
+                    dl_info = get_durl(bvid, video_prop["cid"], quality_dict[ql], cookies)
+                    download(ml_title, video_prop, dl_info, ql)
+                    print(f"[M] {TIME}秒待機中...")
+                    time.sleep(TIME)
             except Exception as e:
                 print(f"[E] {e}")
                 error_bvid.append(bvid)
-            print(f"[M] {TIME}秒待機中...")
-            time.sleep(TIME)
         print("###--------------------------------------###")
     # write error bvid to txt log
     if len(error_bvid) != 1:
@@ -104,15 +106,13 @@ def check_stat(response: dict) -> None:
     API鯖のstatusを確認 [入:マイリスのid 出:マイリス名、ビデオid]
     """
 
-    try:
-        if response["code"] == 0:
-            return
-        elif response["code"] == -101:
-            print("[W] ログインできませんでした. FireFoxにてログインしているか確認してください")
-            return
-        raise Exception(f'[W] API server returns | Error: {response["code"]}')
-    except Exception as e:
-        print(e)
+    if response["code"] == 0:
+        return
+    elif response["code"] == -101:
+        print("[W] ログインできませんでした. FireFoxにてログインしているか確認してください")
+        return
+    print(f"[E] API server returns | Error: {response['code']}")
+    raise Exception(f"Message: {response['message']}")
 
 
 def check_ffmpeg() -> None:
@@ -120,7 +120,7 @@ def check_ffmpeg() -> None:
     ffmpegの確認 []
     """
 
-    if "ffmpeg" in os.environ.get("PATH"):
+    if "ffmpeg" in os.environ.get("PATH", ""):
         return
 
     ffmpeg = glob.glob(rel2abs_path("ffmpeg/bin/ffmpeg*", "exe"), recursive=True)
@@ -206,7 +206,7 @@ def find_local_cookie() -> str:
         break
     if "cookies.sqlite" not in filepath:
         print("[W] cookieを取得できませんでした")
-        return None
+        return ""
     else:
         print("[M] cookieを取得しました")
     return filepath
@@ -224,8 +224,8 @@ def get_cookie() -> dict:
     from json import JSONDecodeError
 
     cookiefile = find_local_cookie()
-    if cookiefile is None:
-        return ""
+    if cookiefile == "":
+        return {}
     temp_dir = tempfile.gettempdir()
     temp_cookiefile = os.path.join(temp_dir, "temp_cookiefile.sqlite")
     shutil.copy2(cookiefile, temp_cookiefile)
@@ -264,59 +264,76 @@ def get_cookie() -> dict:
         return bilibili_cookies
 
 
-def get_bvid(mylist_id: str) -> tuple[str, list]:
+def get_bvids(mylist_id: str) -> tuple[str, list]:
     """
     マイリスから動画のリストを取得 [入:マイリスのid 出:マイリス名、ビデオid]
     """
 
     if "exit" == mylist_id:
-        return None, None
+        return "", []
     if "BV" in mylist_id:  # 動画idの場合は個別ダウンロード
         return "Individual", re.findall(r"BV[A-Za-z0-9]+", mylist_id)
     elif "ml" not in mylist_id:  # 例外処理
         print("[E] リストのidが無効です. 再度入力してください.")
-        return get_bvid(input(" >> "))
-    mylist_id = re.findall(r"ml[A-Za-z0-9]+", mylist_id)[0]
-    url = f"http://api.bilibili.com/x/v3/fav/resource/list?media_id={mylist_id[2:]}&ps=1"
-    res = requests.get(url).json()
-    check_stat(res)
-    ml_title = res["data"]["info"]["title"]  # マイリストの名前
-    ml_title = re.sub(unuse_str, " ", ml_title)
-    url = f"http://api.bilibili.com/x/v3/fav/resource/ids?media_id={mylist_id[2:]}"
-    res = requests.get(url).json()
-    check_stat(res)
-    data = res["data"]
+        return get_bvids(input(" >> "))
+    mylist_ids = re.findall(r"ml[A-Za-z0-9]+", mylist_id)
     bvids = []  # マイリスト内の動画id群
-    for row in data:
-        bvids.append(row["bv_id"])
+    ml_title = ""
+    for mylist_id in mylist_ids:
+        url = f"http://api.bilibili.com/x/v3/fav/resource/list?media_id={mylist_id[2:]}&ps=1"
+        res = requests.get(url, headers=headers).json()
+        check_stat(res)
+        ml_title += res["data"]["info"]["title"]  # マイリストの名前
+        ml_title = re.sub(unuse_str, " ", ml_title)
+        url = f"http://api.bilibili.com/x/v3/fav/resource/ids?media_id={mylist_id[2:]}"
+        res = requests.get(url, headers=headers).json()
+        check_stat(res)
+        data = res["data"]
+        for row in data:
+            bvids.append(row["bv_id"])
     return ml_title, bvids
 
 
-def get_content(bvid: str, qn: int, cookies: dict) -> tuple[dict, list]:
+def get_cids(bvid: str) -> list:
     """
-    ダウンロードURLの取得 [入:ビデオid、画質、cookie 出:ビデオのメタデータ、DLするURL]
+    動画プロパティ (cidなど) の取得 [入:ビデオid、画質、cookie 出:ビデオのメタデータ]
     """
 
     url = f"https://api.bilibili.com/x/web-interface/view?bvid={bvid}"
-    res = requests.get(url).json()
+    res = requests.get(url, headers=headers).json()
     if res["code"] == -404:  # 日本からアクセスを拒否されているものを回避
         print("[M] プロキシ鯖を経由")
         url = f"http://www.ekamali.com/index.php?q={url}&hl=3c0"
-        res = requests.get(url).json()
+        res = requests.get(url, headers=headers).json()
     check_stat(res)
-    video_prop = res["data"]
-    title = f'{video_prop["owner"]["name"]} - {video_prop["title"]}'
-    title = re.sub(unuse_str, " ", title)  # ファイル名に使えない文字を削除
-    print("[M]", title)
+    video_props = []
+    for page in res["data"]["pages"]:
+        video_prop = res["data"].copy()
+        video_prop["cid"] = page["cid"]
+        if len(res["data"]["pages"]) == 1:  # 一つの場合は動画タイトル
+            title = f'{video_prop["owner"]["name"]} - {video_prop["title"]}'
+            title = re.sub(unuse_str, " ", title)  # ファイル名に使えない文字を削除
+        else:  # 複数ページがある場合はページタイトル
+            video_prop["title"] = page["part"]
+            title = f'{video_prop["owner"]["name"]} - {video_prop["title"]}'
+            title = re.sub(unuse_str, " ", title)  # ファイル名に使えない文字を削除
+        video_prop["fname"] = title  # filename を辞書に追加
+        video_props.append(video_prop)
+    return video_props
 
-    cid = res["data"]["cid"]  # ダウンロードするビデオの固有id
+
+def get_durl(bvid: str, cid: str, qn: int, cookies: dict) -> dict:
+    """
+    ダウンロードURLの取得 [入:ビデオid、画質、cookie 出:DLする情報]
+    """
+
     options = f"bvid={bvid}&cid={cid}&qn={qn}&fnval={16|2048}&fnver=0&fourk=1&voice_balance=1"
-    url = "http://api.bilibili.com/x/player/playurl?" + options
+    url = "http://api.bilibili.com/x/player/wbi/playurl?" + options
     res = requests.get(url, cookies=cookies, headers=headers).json()
     check_stat(res)
     data = res["data"]  # 動画のメタデータ
     data = check_quality(data, qn)
-    return video_prop, data
+    return data
 
 
 def check_quality(data: dict, qn: int) -> tuple:
@@ -350,6 +367,7 @@ def download(ml_title: str, video_prop: dict, dl_info: dict, ql: str) -> None:
     動画のダウンロード [入:マイリス名、ビデオのメタデータ、ダウンロード用メタデータ 出:None]
     """
 
+    print("[M]", video_prop["fname"])
     # setup directory
     os.makedirs(rel2abs_path(ml_title, "exe"), exist_ok=True)
     # temp files
@@ -367,9 +385,7 @@ def download(ml_title: str, video_prop: dict, dl_info: dict, ql: str) -> None:
         fp_merge = rel2abs_path(os.path.join(f"merge.{suffix}"), "temp")
         cmd = f"ffmpeg -i {fp_video} -i {fp_audio} -c:v copy -c:a copy -f {suffix} {fp_merge}"
     # output path
-    fname = f"{video_prop['owner']['name']} - {video_prop['title']}"
-    fname = re.sub(unuse_str, " ", fname)  # ファイル名に使えない文字を削除
-    fp = rel2abs_path(os.path.join(ml_title, f"{fname}.{suffix}"), "exe")
+    fp = rel2abs_path(os.path.join(ml_title, f"{video_prop['fname']}.{suffix}"), "exe")
 
     # ファイルの上書きを阻止
     if os.path.isfile(fp):
@@ -425,7 +441,7 @@ def tag2mp3(fp: str, prop: dict) -> None:
     audio.tags.add(TPE1(encoding=3, text=prop["owner"]["name"]))
     # cover art
     print("[M] サムネイルをダウンロード中...")
-    response = requests.get(prop["pic"])
+    response = requests.get(prop["pic"], headers=headers)
     audio.tags.add(APIC(encoding=3, mime="image/jpeg", type=3, desc="Cover", data=response.content))
     audio.save()
 
