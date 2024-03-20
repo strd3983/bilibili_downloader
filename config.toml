@@ -1,0 +1,2 @@
+exist_ok    = true # 上書き保存をするかどうか [true|false]
+codec       = "AVC" # 優先コーデックの指定 [AV1, HEVC, AVC(H264)]

@@ -15,21 +15,15 @@ from tqdm import tqdm as std_tqdm
 __version__ = "XXXX.XX.XX"
 tqdm = partial(std_tqdm, dynamic_ncols=True)
 
+TIME: int = 5
+UNUSE_STR: str = r'[\\/:*?."<>|]+'
 HEADERS: dict = {
     "referer": "https://www.bilibili.com",
     "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)\
                    Chrome/94.0.4606.61 Safari/537.36",
 }
-CONFIG: dict = {}
+DEFAULT_CONF: dict = {"exist_ok": False, "codec": "AV1", "ffmpeg_path": ""}
 QUALITY_DICT: dict = {
-    "1080p60": 116,
-    "720p60": 74,
-    "1080p+": 112,
-    "1080p": 80,
-    "720p": 64,
-    "480p": 32,
-    "360p": 16,
-    "mp3": 0,
     116: "1080p60",
     74: "720p60",
     112: "1080p+",
@@ -41,8 +35,7 @@ QUALITY_DICT: dict = {
     12: "HEVC",
     7: "AVC",
 }
-TIME: int = 5
-UNUSE_STR: str = r'[\\/:*?."<>|]+'
+QUALITY_DICT = {**QUALITY_DICT, **{v: k for k, v in QUALITY_DICT.items()}}
 
 
 def main() -> None:
@@ -55,35 +48,43 @@ def main() -> None:
     print(f"    version: {__version__}")
     print("###############################\n")
     check_version()
+    configs = check_config()
     check_ffmpeg()
     cookies = get_cookie()
     error_bvid: list[str] = ["前回失敗した動画id (コピペで一括再DL)->"]
     while True:
-        print("[M] マイリスid: ml[数字] または動画id: BV[文字列] を入力. 終了する場合はexitを入力.")
+        print("[M] マイリスid: ml[数字] または動画id: BV[文字列] を入力")
+        print("[M] 終了する場合はexitを入力")
         ml_title, bvids = get_bvids(input(" >> "))
         if ml_title == "" and bvids == []:
             break
         print("[M] マイリストのタイトル:", ml_title)
         print("[M] ダウンロードする動画数:", len(bvids))
-        print("[M] ダウンロードする画質:", *list(QUALITY_DICT.keys())[:8])
-        print("[M] mp3を指定すると音声ファイルのみがダウンロード")
+        print("[M] ダウンロードする画質:", *list(QUALITY_DICT.keys())[10:17])
         ql = re.sub(r"[^0-9ampK+]", "", input(">> "))
         while QUALITY_DICT.get(ql) is None:
             call_backtrace("[E] 画質の指定に失敗. 再度入力")
             ql = input(">> ")
         for i, bvid in enumerate(bvids):
-            print(f"###----------------| {i+1}/{len(bvids)} |----------------###")
+            print(f"### ----------------| {i+1}/{len(bvids)} |---------------- ###")
             try:
                 video_props = get_cids(bvid)
                 for video_prop in video_props:
-                    dl_info = get_durl(bvid, video_prop["cid"], QUALITY_DICT[ql], cookies)
-                    download(ml_title, video_prop, dl_info)
-                    print(f"[M] {TIME}秒待機中...")
-                    time.sleep(TIME)
+                    tic = time.time()  # 開始時刻
+                    download(
+                        configs,
+                        ml_title,
+                        video_prop,
+                        get_durl(configs, bvid, video_prop["cid"], QUALITY_DICT[ql], cookies),
+                    )
+                    toc = time.time()  # 開始時刻
+                    if toc - tic < TIME:
+                        print(f"[M] {TIME}秒待機中...")
+                        time.sleep(TIME)
             except Exception:
                 call_backtrace()
                 error_bvid.append(bvid)
-        print("###--------------------------------------###")
+        print("### -------------------------------------- ###")
     # write error bvid to txt log
     if len(error_bvid) != 1:
         with open(rel2abs_path("error_log.txt", "exe"), "w", encoding="UTF-8") as f:
@@ -92,7 +93,7 @@ def main() -> None:
 
 def call_backtrace(msg: str = "", end: str = "\n") -> None:
     """
-    例外エラー発生時にトレースバックを行う [入: エラーメッセージ 出: None]
+    例外エラー発生時に表示やトレースバックを行う [入: エラーメッセージ 出: None]
     """
     import backtrace
 
@@ -104,13 +105,14 @@ def call_backtrace(msg: str = "", end: str = "\n") -> None:
     }
 
     if msg[:3] == "[E]":
-        print(Fore.RED + Style.BRIGHT + msg + Style.RESET_ALL, end=end)
+        print(Fore.RED + Style.BRIGHT + msg, end=end)
     elif msg[:3] == "[W]":
-        print(Fore.YELLOW + Style.BRIGHT + msg + Style.RESET_ALL, end=end)
+        print(Fore.YELLOW + Style.BRIGHT + msg, end=end)
     else:
         tpe, v, tb = sys.exc_info()
         print(Fore.RED + Style.BRIGHT + "[E]" + Style.RESET_ALL)
         backtrace.hook(strip_path=True, align=True, styles=STYLES, tb=tb, tpe=tpe, value=v)
+    print(Style.RESET_ALL, end="")
 
 
 def rel2abs_path(filename: str, attr: str) -> str:
@@ -129,7 +131,7 @@ def rel2abs_path(filename: str, attr: str) -> str:
 
 def check_stat(response: dict) -> None:
     """
-    API鯖のstatusを確認 [入:マイリスのid 出:マイリス名、ビデオid]
+    API鯖のstatusを確認 [入:jsonレスポンス 出:None]
     """
 
     if response["code"] == 0:
@@ -139,6 +141,52 @@ def check_stat(response: dict) -> None:
         return
     call_backtrace(f"[E] API server returns | Error: {response['code']}")
     raise Exception(f"Message: {response['message']}")
+
+
+def check_version() -> None:
+    """
+    プログラムのバージョンチェックを行う [入:None 出:None]
+    """
+    from datetime import date
+
+    try:
+        response = requests.get("https://api.github.com/repos/strd3983/bilibili_downloader/releases/latest").json()
+        tag = response["name"]
+        latest = date(*[int(x) for x in tag[1:].split(".")])
+        now = date(*[int(x) for x in __version__.split(".")])
+
+        if now < latest:
+            url = response["assets"][1] if os.name == "nt" else response["assets"][0]
+            call_backtrace(f"[W] ソフトウェアのアップデートが可能です: v{__version__} -> {tag}")
+            call_backtrace("[W] https://github.com/strd3983/bilibili_downloader/releases/latest")
+            call_backtrace(f"[W] ダウンロード: {url['browser_download_url']}")
+    except ValueError:
+        pass
+    except Exception:
+        call_backtrace()
+
+
+def check_config() -> dict:
+    """
+    yamlファイルから設定を読み込む [入:None 出: 設定]
+    """
+    import toml
+
+    conf: dict = DEFAULT_CONF
+
+    p = rel2abs_path("config.toml", "exe")
+    if os.path.exists(p):
+        # Open the toml file and load it into the CONFIG dictionary
+        with open("config.toml", "r", encoding="utf-8") as f:
+            conf = toml.load(f)
+
+        # Print the CONFIG dictionary to verify the content
+        print("[M] 設定ファイルを読み込みました")
+    else:
+        print("[M] 設定ファイル (config.toml) がありません. デフォルとの値を使用します.")
+    print(f"[M] {str(conf)[1:-1]}")
+
+    return conf
 
 
 def check_ffmpeg() -> None:
@@ -198,29 +246,6 @@ def check_ffmpeg() -> None:
         assert ffmpeg, "自動ダウンロード失敗. ffmpegをダウンロードしてffmpegフォルダ内に配置してください."
 
     os.environ["PATH"] = f"{os.path.dirname(ffmpeg[0])};{os.environ['PATH']}"
-
-
-def check_version() -> None:
-    """
-    プログラムのバージョンチェックを行う [入:None 出:None]
-    """
-    from datetime import date
-
-    try:
-        response = requests.get("https://api.github.com/repos/strd3983/bilibili_downloader/releases/latest").json()
-        tag = response["name"]
-        latest = date(*[int(x) for x in tag[1:].split(".")])
-        now = date(*[int(x) for x in __version__.split(".")])
-
-        if now < latest:
-            url = response["assets"][1] if os.name == "nt" else response["assets"][0]
-            call_backtrace(f"[W] ソフトウェアのアップデートが可能です: v{__version__} -> {tag}")
-            call_backtrace("[W] https://github.com/strd3983/bilibili_downloader/releases/latest")
-            call_backtrace(f"[W] ダウンロード: {url['browser_download_url']}")
-    except ValueError:
-        pass
-    except Exception:
-        call_backtrace()
 
 
 def get_cookie() -> dict:
@@ -296,16 +321,9 @@ def get_cookie() -> dict:
         return bilibili_cookies
 
 
-# TODO: https://github.com/strd3983/bilibili_downloader/issues/13
-def check_config():
-    """
-    tomlファイルから設定を読み込む
-    """
-
-
 def get_bvids(mylist_id: str) -> tuple[str, list]:
     """
-    マイリスから動画のリストを取得 [入:マイリスのid 出:マイリス名、ビデオid]
+    マイリスから動画のリストを取得 [入:マイリスのid 出:マイリス名, ビデオid]
     """
 
     if "exit" == mylist_id:
@@ -335,7 +353,7 @@ def get_bvids(mylist_id: str) -> tuple[str, list]:
 
 def get_cids(bvid: str) -> list:
     """
-    動画プロパティ (cidなど) の取得 [入:ビデオid、画質、cookie 出:ビデオのメタデータ]
+    動画プロパティ (cidなど) の取得 [入:ビデオid, 画質, cookie 出:ビデオのメタデータ]
     """
 
     url = f"https://api.bilibili.com/x/web-interface/view?bvid={bvid}"
@@ -362,14 +380,14 @@ def get_cids(bvid: str) -> list:
     return video_props
 
 
-def get_durl(bvid: str, cid: str, qn: int, cookies: dict) -> list:
+def get_durl(CONFIG: dict, bvid: str, cid: str, qn: int, cookies: dict) -> list:
     """
-    ダウンロードURLの取得 [入:ビデオid、画質、cookie 出:DLする情報]
+    ダウンロードURLの取得 [入:設定, ビデオid, 画質, cookie 出:DLする情報]
     """
 
-    def _check_quality(data: dict, qn: int) -> tuple:
+    def _check_quality(data: dict, qn: int, codec: str) -> tuple:
         """
-        画質とコーデックを指定する [入: jsonデータ、画質 出: 動画と音声データ情報]
+        画質とコーデックを指定する [入: jsonデータ, 画質 出: 動画と音声データ情報]
         """
 
         video = data["dash"]["video"][0] if data["dash"]["video"] is not None else None
@@ -379,14 +397,26 @@ def get_durl(bvid: str, cid: str, qn: int, cookies: dict) -> list:
         for v in data["dash"]["video"]:
             if v["id"] != qn:  # 指定した画質以外は無視
                 continue
+            if v["codecid"] == QUALITY_DICT[codec]:  # コーデックの指定がある場合は優先
+                video = v
+                break
             if video["codecid"] <= v["codecid"]:  # AV1, HEVC, AVCの順に優先度
                 video = v
         # 画質チェック
         if video["id"] != qn:
             if qn not in data["accept_quality"]:
-                call_backtrace("[W] 指定された画質が当動画に存在しません")
+                call_backtrace(
+                    "[W] 指定された画質 ("
+                    + QUALITY_DICT[qn]
+                    + ") は動画 ("
+                    + " ".join([QUALITY_DICT[v] for v in data["accept_quality"]])
+                    + ") に存在しません"
+                )
             else:
                 call_backtrace("[W] 720p60や1080pは一般会員, 1080p60以上は有料会員のログインが必要です")
+        # コーデックチェック
+        if video["codecid"] != QUALITY_DICT[codec]:
+            call_backtrace(f"[W] 指定のコーデック ({codec}) は動画に存在しません")
         # ダウンロードするファイル情報
         print(f"[M] ダウンロード画質: {QUALITY_DICT[video['id']]} ({QUALITY_DICT[video['codecid']]})")
 
@@ -397,13 +427,13 @@ def get_durl(bvid: str, cid: str, qn: int, cookies: dict) -> list:
     res = requests.get(url, cookies=cookies, headers=HEADERS).json()
     check_stat(res)
     data = res["data"]  # 動画のメタデータ
-    data = _check_quality(data, qn)
+    data = _check_quality(data, qn, CONFIG["codec"])
     return data
 
 
-def download(ml_title: str, video_prop: dict, dl_info: list) -> None:
+def download(CONFIG: dict, ml_title: str, video_prop: dict, dl_info: list) -> None:
     """
-    動画のダウンロード [入:マイリス名、ビデオのメタデータ、ダウンロード用メタデータ 出:None]
+    動画のダウンロード [入:設定, マイリス名, ビデオのメタデータ, ダウンロード用メタデータ 出:None]
     """
 
     def _tag2mp3(fp: str, prop: dict) -> None:
@@ -447,7 +477,7 @@ def download(ml_title: str, video_prop: dict, dl_info: list) -> None:
         fps = [fp_video, fp_audio]
         fp_merge = rel2abs_path(os.path.join("merge.mp4"), "temp")
         cmd = f"ffmpeg -i {fp_video} -c:v copy -f mp4 {fp_merge}"
-    else:  # 動画、音声両方ある場合
+    else:  # 動画, 音声両方ある場合
         suffix = "mp4"
         fps = [fp_video, fp_audio]
         fp_merge = rel2abs_path(os.path.join(f"merge.{suffix}"), "temp")
@@ -456,7 +486,7 @@ def download(ml_title: str, video_prop: dict, dl_info: list) -> None:
     fp = rel2abs_path(os.path.join(ml_title, f"{video_prop['fname']}.{suffix}"), "exe")
 
     # ファイルの上書きを阻止
-    if os.path.isfile(fp):
+    if os.path.isfile(fp) and not CONFIG["exist_ok"]:
         call_backtrace("[W] すでにファイルが存在しています")
         return
 

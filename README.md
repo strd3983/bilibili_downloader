@@ -11,17 +11,23 @@
 - [x] 個別ダウンロード
 - [x] マイリストの一括ダウンロード
 - [x] 複数ページのダウンロード
-- [x] 上書き保存をしない
+- [x] 上書き保存するかどうか選択
+- [x] コーデックの指定 (AV1, HEVC, AVC)
 - [ ] ダウンロード履歴管理
 - [ ] FireFoxを必要としないログイン情報の取得
 
 ## Installation
 
-2番以降はビリビリ動画のアカウントを所持しており高画質 (1080pや4Kなど) でダウンロードしたい方のみ必要.
+1. [こちら](https://github.com/strd3983/bilibili_downloader/releases/latest)からzipファイルをダウンロードし解凍
+2. 必要に応じて[`config.toml`](config.toml)ファイルを作成し, カスタマイズする (以下の表を参照).
+3. bilibiliアカウントがある方は以下の手法で1080p以上の動画やプライベートマイリスをダウンロードできる.
+   1. [FireFox](https://www.mozilla.org/firefox/new/)をインストール
+   2. FireFoxにて [bilibili.com](https://www.bilibili.com) にログインする (数か月に一度ログインする必要がある)
 
-1. releaseからzipファイルをダウンロードし解凍
-2. [FireFox](https://www.mozilla.org/firefox/new/)をインストール
-3. FireFoxにて [bilibili.com](https://www.bilibili.com) にログインする (数か月に一度ログインする必要がある)
+| 変数名   | 値               | 概要                                                   |
+| -------- | ---------------- | ------------------------------------------------------ |
+| exist_ok | [true, false]    | 上書き保存を許可するかどうか.                          |
+| codec    | [AV1, HEVC, AVC] | ダウンロードするコーデック. H.265(AV1, HEVC)かH.264か. |
 
 ## Usage
 
@@ -29,7 +35,7 @@
 `https://www.bilibili.com/festival/VRSummerSuper?bvid=BV1wt4y1P78e` のようなURLのコピペからも自動的にidを抜粋してくれる.  
 2. 画質値の入力が求められるので入力する.  
 なお表示されているものでも元動画が対応していなかったりアカウントに権限がない場合は自動的に可能な画質でダウンロードされる.
-3. 単体の動画であれば「Individual」、マイリスであればマイリス名のフォルダに動画保存される
+3. 単体の動画であれば「Individual」, マイリスであればマイリス名のフォルダに動画保存される.
 
 ## Build
 

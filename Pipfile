@@ -12,12 +12,14 @@ types-requests = "*"
 ordered-set = "*"
 mutagen = "*"
 backtrace = "*"
+toml = "*"
 
 [dev-packages]
 flake8 = "*"
 mypy = "*"
 black = "*"
 isort = "*"
+types-toml = "*"
 
 [requires]
 python_version = "3.10"
