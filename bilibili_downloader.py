@@ -150,16 +150,20 @@ def check_version() -> None:
     from datetime import date
 
     try:
-        response = requests.get("https://api.github.com/repos/strd3983/bilibili_downloader/releases/latest").json()
-        tag = response["name"]
+        repo = "https://api.github.com/repos/strd3983/bilibili_downloader"
+        res = requests.get(f"{repo}/releases/latest").json()
+        tag = res["name"]
+        basehead = f"v{__version__}...{tag}"
         latest = date(*[int(x) for x in tag[1:].split(".")])
         now = date(*[int(x) for x in __version__.split(".")])
 
         if now < latest:
-            url = response["assets"][1] if os.name == "nt" else response["assets"][0]
+            durl = res["assets"][1] if os.name == "nt" else res["assets"][0]
             call_backtrace(f"[W] ソフトウェアのアップデートが可能です: v{__version__} -> {tag}")
-            call_backtrace("[W] https://github.com/strd3983/bilibili_downloader/releases/latest")
-            call_backtrace(f"[W] ダウンロード: {url['browser_download_url']}")
+            call_backtrace(f"[W] ダウンロード: {durl['browser_download_url']}")
+            res = requests.get(f"{repo}/compare/{basehead}").json()
+            print("[M] 変更履歴 (#番号はissue番号を参照: https://bit.ly/3IKYi1j)")
+            print("\n".join(["    " + commit["commit"]["message"] for commit in res["commits"]]))
     except ValueError:
         pass
     except Exception:
