@@ -37,6 +37,9 @@ QUALITY_DICT: dict = {
     64: "720p",
     32: "480p",
     16: "360p",
+    13: "AV1",
+    12: "HEVC",
+    7: "AVC",
 }
 TIME: int = 5
 UNUSE_STR: str = r'[\\/:*?."<>|]+'
@@ -74,7 +77,7 @@ def main() -> None:
                 video_props = get_cids(bvid)
                 for video_prop in video_props:
                     dl_info = get_durl(bvid, video_prop["cid"], QUALITY_DICT[ql], cookies)
-                    download(ml_title, video_prop, dl_info, ql)
+                    download(ml_title, video_prop, dl_info)
                     print(f"[M] {TIME}秒待機中...")
                     time.sleep(TIME)
             except Exception:
@@ -374,11 +377,9 @@ def get_durl(bvid: str, cid: str, qn: int, cookies: dict) -> list:
         if qn == 0 or video is None:
             return None, audio
         for v in data["dash"]["video"]:
-            # 指定した画質以外は無視
-            if v["id"] != qn:
+            if v["id"] != qn:  # 指定した画質以外は無視
                 continue
-            # AV1, HEVC, AVCの順に優先度
-            if video["codecid"] < v["codecid"]:
+            if video["codecid"] <= v["codecid"]:  # AV1, HEVC, AVCの順に優先度
                 video = v
         # 画質チェック
         if video["id"] != qn:
@@ -386,9 +387,8 @@ def get_durl(bvid: str, cid: str, qn: int, cookies: dict) -> list:
                 call_backtrace("[W] 指定された画質が当動画に存在しません")
             else:
                 call_backtrace("[W] 720p60や1080pは一般会員, 1080p60以上は有料会員のログインが必要です")
-                call_backtrace("[W] (一部動画は自動的にこの警告が表示されます. その場合は無視してください.)")
-        # ダウンロードするファイル情報 (HEVC優先)
-        print("[M] ダウンロード画質:", QUALITY_DICT.get(video["id"]))
+        # ダウンロードするファイル情報
+        print(f"[M] ダウンロード画質: {QUALITY_DICT[video['id']]} ({QUALITY_DICT[video['codecid']]})")
 
         return video, audio
 
@@ -401,7 +401,7 @@ def get_durl(bvid: str, cid: str, qn: int, cookies: dict) -> list:
     return data
 
 
-def download(ml_title: str, video_prop: dict, dl_info: list, ql: str) -> None:
+def download(ml_title: str, video_prop: dict, dl_info: list) -> None:
     """
     動画のダウンロード [入:マイリス名、ビデオのメタデータ、ダウンロード用メタデータ 出:None]
     """
