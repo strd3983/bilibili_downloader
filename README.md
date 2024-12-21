@@ -41,10 +41,12 @@
 
 ### 1. Python環境を構築
 
-仮想環境にてインストール.  Pythonのバージョンは3.7推奨. Pyenv+PipenvまたはPyenv+Poetry推奨.
+仮想環境にてインストール.  Pythonのバージョンは3.8以上推奨 (配布exeは3.13.1) . venv推奨.
 
 ```bash
-pipenv install --dev
+python -m venv .venv
+. .venv/Scripts/activate 
+pip install -r requirements.txt
 ```
 
 ### 2. Pythonをgccでビルドする

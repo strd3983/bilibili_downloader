@@ -79,20 +79,15 @@ jobs:
         run: ${{ matrix.sed_cmd }}
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
-
-      - name: Install Pipenv
-        run: |
-          pip install --upgrade pip
-          pip install pipenv
+          python-version: "3.12.8"
 
       - name: Install Dependencies
-        run: pipenv install --skip-lock --system
+        run: pip install -r requirements.txt
 
       - name: Build with Nuitka
-        run: python -m nuitka --standalone --onefile --assume-yes-for-downloads bilibili_downloader.py
+        run: python -m nuitka --onefile --assume-yes-for-downloads bilibili_downloader.py
 
       # Make a zip file
       - name: Make ZIP files on Windows
@@ -100,7 +95,7 @@ jobs:
 
       # Upload EXE files
       - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1.0.1
+        uses: shogo82148/actions-upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
