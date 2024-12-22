@@ -23,19 +23,29 @@ HEADERS: dict = {
                    Chrome/94.0.4606.61 Safari/537.36",
 }
 DEFAULT_CONF: dict = {"exist_ok": False, "codec": "AV1", "ffmpeg_path": ""}
-QUALITY_DICT: dict = {
-    116: "1080p60",
-    74: "720p60",
-    112: "1080p+",
-    80: "1080p",
-    64: "720p",
-    32: "480p",
-    16: "360p",
-    13: "AV1",
-    12: "HEVC",
-    7: "AVC",
+S2QN_DICT: dict = {  # string to qn
+    "8K": 127,
+    "Dolby": 126,
+    "HDR": 125,
+    "4K": 120,
+    "1080p60": 116,
+    "1080p+": 112,
+    "1080p": 80,
+    "720p60": 74,
+    "720p": 64,
+    "480p": 32,
+    "360p": 16,
+    "AV1": 13,
+    "HEVC": 12,
+    "AVC": 7,
 }
-QUALITY_DICT = {**QUALITY_DICT, **{v: k for k, v in QUALITY_DICT.items()}}
+QN2S_DICT = {value: key for key, value in S2QN_DICT.items()}
+FNVAL_DICT = {  # qn to fnval
+    125: 64,
+    120: 128,
+    126: 512,
+    127: 1024,
+}
 
 
 def main() -> None:
@@ -60,11 +70,11 @@ def main() -> None:
             break
         print("[M] マイリストのタイトル:", ml_title)
         print("[M] ダウンロードする動画数:", len(bvids))
-        print("[M] ダウンロードする画質:", *list(QUALITY_DICT.keys())[10:17])
-        ql = re.sub(r"[^0-9ampK+]", "", input(">> "))
-        while QUALITY_DICT.get(ql) is None:
+        print("[M] ダウンロードする画質:", *list(S2QN_DICT.keys())[:11])
+        ql = re.sub(r"[^0-9ampK+]", "", input(" >> "))
+        while S2QN_DICT.get(ql) is None:
             call_backtrace("[E] 画質の指定に失敗. 再度入力")
-            ql = input(">> ")
+            ql = input(" >> ")
         for i, bvid in enumerate(bvids):
             print(f"### ----------------| {i+1}/{len(bvids)} |---------------- ###")
             try:
@@ -75,7 +85,7 @@ def main() -> None:
                         configs,
                         ml_title,
                         video_prop,
-                        get_durl(configs, bvid, video_prop["cid"], QUALITY_DICT[ql], cookies),
+                        get_durl(configs, bvid, video_prop["cid"], S2QN_DICT[ql], cookies),
                     )
                     toc = time.time()  # 開始時刻
                     if toc - tic < TIME:
@@ -172,7 +182,7 @@ def check_version() -> None:
 
 def check_config() -> dict:
     """
-    yamlファイルから設定を読み込む [入:None 出: 設定]
+    tomlファイルから設定を読み込む [入:None 出: 設定]
     """
     import toml
 
@@ -401,32 +411,34 @@ def get_durl(CONFIG: dict, bvid: str, cid: str, qn: int, cookies: dict) -> list:
         for v in data["dash"]["video"]:
             if v["id"] != qn:  # 指定した画質以外は無視
                 continue
-            if v["codecid"] == QUALITY_DICT[codec]:  # コーデックの指定がある場合は優先
+            if v["codecid"] == S2QN_DICT[codec]:  # コーデックの指定がある場合は優先
                 video = v
                 break
             if video["codecid"] <= v["codecid"]:  # AV1, HEVC, AVCの順に優先度
                 video = v
         # 画質チェック
+        print("[M]", "ダウンロード可能な画質:", " ".join([QN2S_DICT[v] for v in data["accept_quality"]]))
         if video["id"] != qn:
-            if qn not in data["accept_quality"]:
-                call_backtrace(
-                    "[W] 指定された画質 ("
-                    + QUALITY_DICT[qn]
-                    + ") は動画 ("
-                    + " ".join([QUALITY_DICT[v] for v in data["accept_quality"]])
-                    + ") に存在しません"
-                )
-            else:
-                call_backtrace("[W] 720p60や1080pは一般会員, 1080p60以上は有料会員のログインが必要です")
-        # コーデックチェック
-        if video["codecid"] != QUALITY_DICT[codec]:
-            call_backtrace(f"[W] 指定のコーデック ({codec}) は動画に存在しません")
+            warn = ""
+            warn += (
+                f"[W] 指定された画質 ({QN2S_DICT[qn]}) は動画に存在しません. "
+                if qn not in data["accept_quality"]
+                else "[W] 720p60や1080pは一般会員, 1080p60以上は有料会員のログインが必要です. "
+            )
+            warn += "強制的にAVCになります. "
+            call_backtrace(warn)
+        else:
+            # コーデックチェック
+            if video["codecid"] != S2QN_DICT[codec]:
+                call_backtrace(f"[W] 指定のコーデック ({codec}) は動画に存在しません")
+
         # ダウンロードするファイル情報
-        print(f"[M] ダウンロード画質: {QUALITY_DICT[video['id']]} ({QUALITY_DICT[video['codecid']]})")
+        print(f"[M] ダウンロード画質: {QN2S_DICT[video['id']]} ({QN2S_DICT[video['codecid']]})")
 
         return video, audio
 
-    options = f"bvid={bvid}&cid={cid}&qn={qn}&fnval={16|2048}&fnver=0&fourk=1&voice_balance=1"
+    fnval = 16 | FNVAL_DICT.get(qn, 0) | 2048
+    options = f"bvid={bvid}&cid={cid}&qn={qn}&fnval={fnval}&fnver=0&fourk=1&voice_balance=1"
     url = "http://api.bilibili.com/x/player/wbi/playurl?" + options
     res = requests.get(url, cookies=cookies, headers=HEADERS).json()
     check_stat(res)
