@@ -1,6 +1,7 @@
 # main
 qrcode
 pillow
+matplotlib
 backtrace
 mutagen
 nuitka

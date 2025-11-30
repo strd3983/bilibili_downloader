@@ -8,7 +8,6 @@ import time
 from functools import partial
 from typing import Tuple, cast
 
-import qrcode
 import requests
 from colorama import Fore, Style
 from tqdm import tqdm as std_tqdm
@@ -533,6 +532,8 @@ def qr_login() -> dict:
     """
     ログイン機能 [入:None 出:cookie]
     """
+    import matplotlib.pyplot as plt
+    import qrcode
 
     # QRコード生成API
     generate_url = "https://passport.bilibili.com/x/passport-login/web/qrcode/generate"
@@ -544,11 +545,15 @@ def qr_login() -> dict:
 
     # QRコード生成
     img = qrcode.make(qrcode_url)
-    img.show()  # 画像ビューアで表示
 
     poll_url = f"https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key={qrcode_key}"
 
     while True:
+        plt.imshow(img, cmap="gray")
+        plt.axis("off")  # 軸を消す
+        plt.tight_layout(pad=0)  # 余白をゼロに
+        plt.show(block=False)  # 非ブロッキング表示
+
         poll_resp = requests.get(poll_url, headers=HEADERS)
         poll_data = poll_resp.json()
         code = poll_data["data"]["code"]
@@ -558,14 +563,14 @@ def qr_login() -> dict:
         elif code == 0:
             print("[M] 承認済み！ログイン成功")
             cookies = poll_resp.cookies.get_dict()
-            img.close()
             break
         elif code == 86039:
             print("[E] QRコード失効. 再度ログインしてください.")
             cookies = qr_login()
             break
-        time.sleep(2)  # 2秒ごとに確認
+        plt.pause(2)
 
+    plt.close()
     return cookies
 
 
