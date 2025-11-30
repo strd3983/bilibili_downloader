@@ -73,15 +73,15 @@ jobs:
     steps:
       # Buid EXE files
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v5
 
       - name: Set Version
         run: ${{ matrix.sed_cmd }}
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
-          python-version: "3.12.8"
+          python-version: "3.13"
 
       - name: Install Dependencies
         run: pip install -r requirements.txt
