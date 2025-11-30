@@ -1,4 +1,6 @@
 # main
+qrcode
+pillow
 backtrace
 mutagen
 nuitka
@@ -7,11 +9,3 @@ requests
 toml
 tqdm
 zstandard
-
-# dev
-flake8
-black
-isort
-mypy
-types-requests
-types-toml

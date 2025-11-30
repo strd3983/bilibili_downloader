@@ -1,0 +1,10 @@
+# ruff.toml
+
+# Black 相当の設定
+line-length = 119
+
+# Flake8 相当の設定
+extend-ignore = ["E203"]
+
+# 必要に応じて追加できるオプション例
+# target-version = "py311"   # Python バージョン指定

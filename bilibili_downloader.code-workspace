@@ -17,16 +17,6 @@
     "editor.formatOnType": true, // タイピング時にフォーマットをオンに
     "editor.formatOnPaste": false, // 貼り付け時のフォーマットはオフに
     "python.terminal.activateEnvironment": true,
-    "black-formatter.args": [
-      "--line-length",
-      "119"
-    ],
-    "flake8.args": [
-      "--max-line-length",
-      "119",
-      "--extend-ignore",
-      "E203",
-    ],
     "mypy-type-checker.args": [
       "--ignore-missing-imports",
       "--follow-imports=silent",
