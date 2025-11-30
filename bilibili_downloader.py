@@ -149,7 +149,6 @@ def check_stat(response: dict) -> None:
     if response["code"] == 0:
         return
     elif response["code"] == -101:
-        call_backtrace("[W] ログインできませんでした. FireFoxにてログインしているか確認してください")
         return
     call_backtrace(f"[E] API server returns | Error: {response['code']}")
     raise Exception(f"Message: {response['message']}")
@@ -579,6 +578,8 @@ def check_login(bilibili_cookies: dict) -> None:
     # display username who logged in
     url = "https://api.bilibili.com/x/web-interface/nav"
     try:
+        if not bilibili_cookies:
+            raise KeyError("No cookies")
         res = requests.get(url, cookies=bilibili_cookies, headers=HEADERS).json()
         check_stat(res)
         print("[M]", Fore.GREEN + Style.BRIGHT + res["data"]["uname"] + Style.RESET_ALL, "としてログイン")
@@ -588,6 +589,8 @@ def check_login(bilibili_cookies: dict) -> None:
         res = requests.get(url, cookies=bilibili_cookies, headers=HEADERS).json()
         check_stat(res)
         print("[M]", Fore.GREEN + Style.BRIGHT + res["data"]["uname"] + Style.RESET_ALL, "としてログイン")
+    except KeyError:
+        call_backtrace("[W] ログインできませんでした. FireFoxにてログインしているか確認してください.")
 
 
 if __name__ == "__main__":
