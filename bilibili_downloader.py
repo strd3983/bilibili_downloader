@@ -8,6 +8,7 @@ import time
 from functools import partial
 from typing import Tuple, cast
 
+import qrcode
 import requests
 from colorama import Fore, Style
 from tqdm import tqdm as std_tqdm
@@ -61,6 +62,7 @@ def main() -> None:
     configs = check_config()
     check_ffmpeg()
     cookies = get_cookie()
+    check_login(cookies)
     error_bvid: list[str] = ["前回失敗した動画id (コピペで一括再DL)->"]
     while True:
         print("[M] マイリスid: ml[数字] または動画id: BV[文字列] を入力")
@@ -76,7 +78,7 @@ def main() -> None:
             call_backtrace("[E] 画質の指定に失敗. 再度入力")
             ql = input(" >> ")
         for i, bvid in enumerate(bvids):
-            print(f"### ----------------| {i+1}/{len(bvids)} |---------------- ###")
+            print(f"### ----------------| {i + 1}/{len(bvids)} |---------------- ###")
             try:
                 video_props = get_cids(bvid)
                 for video_prop in video_props:
@@ -267,7 +269,7 @@ def get_cookie() -> dict:
     cookieを取得する [入:None 出:ビリビリ用のcookie]
     """
 
-    def _find_local_cookie() -> str:
+    def _find_firefox_cookie() -> str:
         """
         PC上に存在するcookieを探索 [入:None 出:cookieのパス]
         """
@@ -292,47 +294,35 @@ def get_cookie() -> dict:
     import shutil
     import sqlite3
     import tempfile
-    from json import JSONDecodeError
 
-    cookiefile = _find_local_cookie()
-    if cookiefile == "":
-        return {}
-    temp_dir = tempfile.gettempdir()
-    temp_cookiefile = os.path.join(temp_dir, "temp_cookiefile.sqlite")
-    shutil.copy2(cookiefile, temp_cookiefile)
-    cookies = http.cookiejar.MozillaCookieJar()
-    con = sqlite3.connect(temp_cookiefile)
-    cur = con.cursor()
-    cur.execute("SELECT host, name, value FROM moz_cookies")
-    cookies = cur.fetchall()  # type: ignore
-    cur.close
-    con.close
+    bilibili_cookies = {}
+    cookiefile = _find_firefox_cookie()
+    if cookiefile != "":
+        temp_dir = tempfile.gettempdir()
+        temp_cookiefile = os.path.join(temp_dir, "temp_cookiefile.sqlite")
+        shutil.copy2(cookiefile, temp_cookiefile)
+        cookies = http.cookiejar.MozillaCookieJar()
+        con = sqlite3.connect(temp_cookiefile)
+        cur = con.cursor()
+        cur.execute("SELECT host, name, value FROM moz_cookies")
+        cookies = cur.fetchall()  # type: ignore
+        cur.close
+        con.close
 
-    names = []
-    values = []
-    for cookie in cookies:
-        # cookie:('host', 'name', 'value')
-        c = cast(Tuple[str, str, str], cookie)
-        if c[0] == ".bilibili.com":
-            names.append(c[1])
-            values.append(c[2])
+        names = []
+        values = []
+        for cookie in cookies:
+            # cookie:('host', 'name', 'value')
+            c = cast(Tuple[str, str, str], cookie)
+            if c[0] == ".bilibili.com":
+                names.append(c[1])
+                values.append(c[2])
 
-    bilibili_cookies = dict(zip(names, values))
+        bilibili_cookies = dict(zip(names, values))
+    if bilibili_cookies == {} and input("[M] QRコードでログインしますか? (y/n): ").lower() == "y":
+        bilibili_cookies = qr_login()
 
-    # display username who logged in
-    url = "https://api.bilibili.com/x/web-interface/nav"
-    try:
-        res = requests.get(url, cookies=bilibili_cookies, headers=HEADERS).json()
-        check_stat(res)
-        print("[M]", Fore.GREEN + Style.BRIGHT + res["data"]["uname"] + Style.RESET_ALL, "としてログイン")
-    except JSONDecodeError:
-        call_backtrace("[W] サブのurlが使用されます")
-        url = "https://api.bilibili.com/nav"
-        res = requests.get(url, cookies=bilibili_cookies, headers=HEADERS).json()
-        check_stat(res)
-        print("[M]", Fore.GREEN + Style.BRIGHT + res["data"]["uname"] + Style.RESET_ALL, "としてログイン")
-    finally:
-        return bilibili_cookies
+    return bilibili_cookies
 
 
 def get_bvids(mylist_id: str) -> tuple[str, list]:
@@ -383,11 +373,11 @@ def get_cids(bvid: str) -> list:
         video_prop = res["data"].copy()
         video_prop["cid"] = page["cid"]
         if len(res["data"]["pages"]) == 1:  # 一つの場合は動画タイトル
-            title = f'{video_prop["owner"]["name"]} - {video_prop["title"]}'
+            title = f"{video_prop['owner']['name']} - {video_prop['title']}"
             title = re.sub(UNUSE_STR, " ", title)  # ファイル名に使えない文字を削除
         else:  # 複数ページがある場合はページタイトル
             video_prop["title"] = page["part"]
-            title = f'{video_prop["owner"]["name"]} - {video_prop["title"]}'
+            title = f"{video_prop['owner']['name']} - {video_prop['title']}"
             title = re.sub(UNUSE_STR, " ", title)  # ファイル名に使えない文字を削除
         video_prop["fname"] = title  # filename を辞書に追加
         video_props.append(video_prop)
@@ -538,6 +528,66 @@ def download(CONFIG: dict, ml_title: str, video_prop: dict, dl_info: list) -> No
     else:
         os.remove(fp_video)
         os.remove(fp_audio)
+
+
+def qr_login() -> dict:
+    """
+    ログイン機能 [入:None 出:cookie]
+    """
+
+    # QRコード生成API
+    generate_url = "https://passport.bilibili.com/x/passport-login/web/qrcode/generate"
+    resp = requests.get(generate_url, headers=HEADERS)
+    data = resp.json()["data"]
+
+    qrcode_url = data["url"]  # QRコードの内容
+    qrcode_key = data["qrcode_key"]  # 識別キー
+
+    # QRコード生成
+    img = qrcode.make(qrcode_url)
+    img.show()  # 画像ビューアで表示
+
+    poll_url = f"https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key={qrcode_key}"
+
+    while True:
+        poll_resp = requests.get(poll_url, headers=HEADERS)
+        poll_data = poll_resp.json()
+        code = poll_data["data"]["code"]
+
+        if code == 86090:
+            print("[M] スキャン済み、未承認")
+        elif code == 0:
+            print("[M] 承認済み！ログイン成功")
+            cookies = poll_resp.cookies.get_dict()
+            img.close()
+            break
+        elif code == 86039:
+            print("[E] QRコード失効. 再度ログインしてください.")
+            cookies = qr_login()
+            break
+        time.sleep(2)  # 2秒ごとに確認
+
+    return cookies
+
+
+def check_login(bilibili_cookies: dict) -> None:
+    """
+    ログイン状態の確認 [入:None 出:None]
+    """
+    from json import JSONDecodeError
+
+    # display username who logged in
+    url = "https://api.bilibili.com/x/web-interface/nav"
+    try:
+        res = requests.get(url, cookies=bilibili_cookies, headers=HEADERS).json()
+        check_stat(res)
+        print("[M]", Fore.GREEN + Style.BRIGHT + res["data"]["uname"] + Style.RESET_ALL, "としてログイン")
+    except JSONDecodeError:
+        call_backtrace("[W] サブのurlが使用されます")
+        url = "https://api.bilibili.com/nav"
+        res = requests.get(url, cookies=bilibili_cookies, headers=HEADERS).json()
+        check_stat(res)
+        print("[M]", Fore.GREEN + Style.BRIGHT + res["data"]["uname"] + Style.RESET_ALL, "としてログイン")
 
 
 if __name__ == "__main__":
