@@ -532,7 +532,6 @@ def qr_login() -> dict:
     """
     ログイン機能 [入:None 出:cookie]
     """
-    import matplotlib.pyplot as plt
     import qrcode
 
     # QRコード生成API
@@ -544,22 +543,24 @@ def qr_login() -> dict:
     qrcode_key = data["qrcode_key"]  # 識別キー
 
     # QRコード生成
-    img = qrcode.make(qrcode_url)
+    qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_H)
+    qr.add_data(qrcode_url)
+    qr.print_ascii()
+    qr_path = rel2abs_path("qrcode.png", "exe")
+    img = qr.make_image()
+    img.save(qr_path)
+    print(f"[M] QRコードを {qr_path} に保存しました.")
+    print("[M] 上記QRが読み取れない場合、画像ファイルより読み取ってください.\n")
 
     poll_url = f"https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key={qrcode_key}"
 
     while True:
-        plt.imshow(img, cmap="gray")
-        plt.axis("off")  # 軸を消す
-        plt.tight_layout(pad=0)  # 余白をゼロに
-        plt.show(block=False)  # 非ブロッキング表示
-
         poll_resp = requests.get(poll_url, headers=HEADERS)
         poll_data = poll_resp.json()
         code = poll_data["data"]["code"]
 
         if code == 86090:
-            print("[M] スキャン済み、未承認")
+            print("[M] スキャン済み、未承認\r", end="")
         elif code == 0:
             print("[M] 承認済み！ログイン成功")
             cookies = poll_resp.cookies.get_dict()
@@ -568,9 +569,8 @@ def qr_login() -> dict:
             print("[E] QRコード失効. 再度ログインしてください.")
             cookies = qr_login()
             break
-        plt.pause(2)
-
-    plt.close()
+        time.sleep(2)
+    os.remove(qr_path)
     return cookies
 
 
@@ -606,6 +606,7 @@ if __name__ == "__main__":
     try:
         main()
     except Exception:
+        os.remove(rel2abs_path("qrcode.png", "exe"))
         call_backtrace()
     print("[M] 終了しました")
     if os.name == "nt":
